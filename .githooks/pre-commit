@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# Pre-commit guard: block credentials from ever entering git history.
+#
+# Installed automatically by the `prepare` script in package.json, which points
+# git at this directory via core.hooksPath. No husky, no global installs.
+#
+# Bypass (only ever for a verified false positive):  git commit --no-verify
+
+set -e
+
+# 1. Hard block on .env files, whatever .gitignore says.
+if git diff --cached --name-only --diff-filter=ACM | grep -E '(^|/)\.env(\.|$)' | grep -qv '\.env\.example$'; then
+  echo ""
+  echo "  BLOCKED: an .env file is staged."
+  echo "  Real credentials must never be committed. Unstage it with:"
+  echo "      git restore --staged <file>"
+  echo ""
+  exit 1
+fi
+
+# 2. Pattern scan over staged content.
+if command -v node >/dev/null 2>&1; then
+  npm run --silent secrets:scan -- --staged
+else
+  echo "  node not found; skipping secret pattern scan."
+fi

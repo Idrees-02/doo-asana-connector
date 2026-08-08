@@ -1,0 +1,7 @@
+dist
+node_modules
+coverage
+frontend/dist
+openapi.yaml
+connector.yaml
+frontend/src/generated

@@ -1,0 +1,64 @@
+{
+  "name": "doo-asana-connector",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Production-oriented Asana connector for the DOO Builders League — reusable connector core, five typed actions, thin MCP adapter, and a premium local console.",
+  "author": "Idrees Khaled",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
+    "dev": "concurrently -n api,web -c magenta,cyan \"npm:dev:api\" \"npm:dev:frontend\"",
+    "dev:api": "tsx watch server/index.ts",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "build": "npm run build:core && npm run build:frontend",
+    "build:core": "tsc -p tsconfig.build.json",
+    "build:frontend": "npm run build --workspace frontend",
+    "start": "node dist/server/index.js",
+    "mcp": "tsx mcp/server.ts",
+    "mcp:inspect": "npx --yes @modelcontextprotocol/inspector tsx mcp/server.ts",
+    "generate": "tsx scripts/generate-all.ts",
+    "smoke:live": "tsx scripts/smoke-live.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:frontend": "npm run test --workspace frontend",
+    "typecheck": "tsc --noEmit && npm run typecheck --workspace frontend",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,yaml,yml,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md,yaml,yml,css}\"",
+    "secrets:scan": "tsx scripts/scan-secrets.ts",
+    "verify": "npm run typecheck && npm run lint && npm run secrets:scan && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2",
+    "helmet": "^8.3.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.18.13",
+    "concurrently": "^10.0.4",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.8",
+    "msw": "^2.15.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.11",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.66.0",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# No secrets are configured for this workflow, and none are needed: the entire
+# suite runs against mocked HTTP and the demo provider. If a test ever required
+# a real Asana credential, that would be a design bug.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20.19', '22', '24']
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Secret scan
+        run: npm run secrets:scan
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Connector tests
+        run: npm test
+
+      - name: Frontend tests
+        run: npm run test:frontend
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify generated artifacts are current
+        # openapi.yaml and connector.yaml are generated from the Zod schemas.
+        # If regenerating changes them, the committed copies are stale.
+        run: |
+          npm run generate
+          if ! git diff --quiet -- openapi.yaml connector.yaml; then
+            echo "::error::openapi.yaml / connector.yaml are out of date. Run 'npm run generate' and commit the result."
+            git diff -- openapi.yaml connector.yaml
+            exit 1
+          fi
