@@ -225,12 +225,21 @@ describe('ConnectorError serialization — what must never escape', () => {
   });
 
   it('redacts credential-shaped content out of error messages', () => {
+    /*
+     * Assembled at runtime rather than written as a literal. The value is
+     * entirely synthetic, but a real-looking PAT literal in the repository
+     * would trip GitHub's push protection — and a project that trains people
+     * to click past secret-scanning warnings has defeated the point of having
+     * them.
+     */
+    const secretPart = '9f8e7d6c5b4a39281706f5e4d3c2b1a0';
+    const syntheticToken = ['1', `1234567890123456:${secretPart}`].join('/');
+
     const err = new ConnectorError(ERROR_CODES.AUTHENTICATION_ERROR, {
-      // Synthetic token, present precisely to prove redaction works. secrets-scan-ignore
-      message: 'Rejected token SYNTHETIC-TOKEN-REMOVED from client',
+      message: `Rejected token ${syntheticToken} from client`,
     });
 
-    expect(err.message).not.toContain('9f8e7d6c5b4a39281706f5e4d3c2b1a0');
+    expect(err.message).not.toContain(secretPart);
     expect(err.message).toContain('[REDACTED]');
   });
 

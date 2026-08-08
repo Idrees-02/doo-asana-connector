@@ -30,7 +30,9 @@ const RULES: readonly Rule[] = [
   {
     id: 'asana-pat',
     description: 'Asana Personal Access Token',
-    // e.g. 1/<user-gid>:<hex-secret>
+    // Shape: 1/<numeric user gid>:<hex secret>. Deliberately described
+    // rather than written out, so this file does not itself trip
+    // GitHub's push protection.
     pattern: new RegExp(String.raw`\b1\/\d{10,}:[0-9a-f]{20,}\b`, 'g'),
   },
   {
