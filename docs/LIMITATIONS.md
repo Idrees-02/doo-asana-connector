@@ -6,36 +6,34 @@ than reading about it here.
 
 ---
 
-## Not verified against live Asana
+## Verified against live Asana
 
-**This is the most important item on the page.**
+All five actions have been run against a real Asana workspace using a Personal
+Access Token, via `npm run smoke:live -- --writes`:
 
-Every action has been exercised end-to-end, but against an **in-memory Asana
-API** (`src/demo/demo-api.ts`), not against `app.asana.com`. The in-memory API
-reproduces the parts of Asana's contract the connector depends on — the
-`{data, next_page}` envelope, opaque cursor pagination, the `{errors: [...]}`
-error shape, `Retry-After`, and the 404/401/403/429/500 responses — and it was
-written from Asana's current published documentation.
-
-What that means:
-
-| Claim | Status |
+| Check | Result |
 | --- | --- |
-| The five actions work against the connector's own contract | **Verified by test** |
-| Request shapes match Asana's documented API | **Verified against docs**, not against the live API |
-| Live end-to-end flow against a real workspace | **Not yet run** |
+| `testConnection` | Connected, 1 workspace, ~920ms |
+| `asana.list_projects` | Live projects returned |
+| `asana.list_project_tasks` | Live tasks returned |
+| Unapproved write refused | `ASANA_APPROVAL_REQUIRED`, no network call |
+| `asana.create_task` | Task created |
+| Idempotency key replay | Original result replayed, **no duplicate** |
+| `asana.update_task` | Only the named field sent |
+| `asana.add_comment` | Comment posted |
 
-To close the gap, add a Personal Access Token to `.env` and run:
+9 passed, 0 failed.
+
+What that does **not** cover: OAuth 2.0 has been implemented and type-checked
+but the browser authorization flow has not been walked end-to-end against
+Asana. The PAT path is the verified one.
+
+Re-run at any time:
 
 ```bash
-npm run smoke:live
+npm run smoke:live              # read-only
+npm run smoke:live -- --writes  # full cycle
 ```
-
-Read-only by default. Add `-- --writes` to exercise create, update and comment
-against a project you nominate.
-
-Until that has been run, treat "works with Asana" as *expected* rather than
-*demonstrated*.
 
 ---
 

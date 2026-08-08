@@ -74,21 +74,25 @@ A PAT is the quickest path and is all you need for local review.
 4. Name it something identifiable, e.g. `doo-asana-connector-dev`.
 5. Accept the API terms, then click **Create token**.
 6. **Copy it immediately — Asana shows it exactly once.**
-   The format looks like `1/1234567890123456:abcdef0123456789…`
-7. Create your `.env` and paste it in:
+7. Run the setup command and paste it when prompted:
 
    ```bash
-   cp .env.example .env
+   npm run setup
    ```
 
-   Then set the one line that matters:
+   Input is hidden while you type, so the token never appears on screen, in a
+   screen recording, or in your shell history. It is written to `.env` with
+   permissions `0600` and verified against Asana immediately — without ever
+   being displayed back to you.
 
-   ```
-   ASANA_ACCESS_TOKEN=1/your-token-here
-   ```
+   Prefer doing it by hand? `cp .env.example .env`, then edit the
+   `ASANA_ACCESS_TOKEN=` line in your editor.
 
 8. Restart `npm run dev`. The amber **DEMO MODE** banner disappears and
    **Settings → Test Connection** shows your real account and workspaces.
+
+> **`.env.example` is tracked by git and is public.** Only ever put
+> placeholders there. Real values belong in `.env`, which is gitignored.
 
 **Tip:** actions performed through a PAT are attributed to *you* in Asana's
 activity feed. For a shared or demo setup, create a dedicated bot user and
@@ -247,7 +251,7 @@ Marked honestly. Anything not demonstrated is called out rather than assumed.
 | Requirement | Status |
 | --- | --- |
 | Manifest exists | Yes — generated, `connector.yaml` |
-| Asana authentication (PAT + OAuth 2.0) | Implemented; **live flow not yet run** |
+| Asana authentication (PAT + OAuth 2.0) | PAT **verified live**; OAuth implemented, browser flow unverified |
 | `testConnection` has no side effects | Yes — asserted by test (no non-GET request) |
 | All five actions implemented | Yes — end-to-end tested |
 | Typed input/output schemas | Yes — Zod, single source of truth |
@@ -266,11 +270,11 @@ Marked honestly. Anything not demonstrated is called out rather than assumed.
 | Frontend responsive and accessible | Yes — per-breakpoint layouts, 25 tests |
 | Documentation and known limitations | Yes |
 | Versioned v1.0.0 | Yes |
-| **Real sandbox/test-account flow** | **Not yet run** — needs a PAT; `npm run smoke:live` |
+| **Real sandbox/test-account flow** | **Verified** — all 5 actions live, 9/9 passed |
 | **HTTPS MCP endpoint deployed** | **Not met by design** — local-first; HTTP transport implemented but undeployed |
 
-The last two are the honest gaps. See
-[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+The remaining gap is the HTTPS MCP endpoint, which is not met by design
+(local-first). See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 ---
 
@@ -283,6 +287,7 @@ The last two are the honest gaps. See
 | `npm run test:frontend` | Console suite (25 tests) |
 | `npm run verify` | typecheck + lint + secret scan + tests |
 | `npm run generate` | Regenerate `openapi.yaml` and `connector.yaml` |
+| `npm run setup` | Interactive .env setup — hidden token input, verifies the connection |
 | `npm run smoke:live` | Read-only check against real Asana (needs a PAT) |
 | `npm run smoke:live -- --writes` | Also exercises create/update/comment |
 | `npx tsx examples/use-connector.ts` | Use the connector as a library |

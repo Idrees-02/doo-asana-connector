@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Production-oriented Asana connector for the DOO Builders League — reusable connector core, five typed actions, thin MCP adapter, and a premium local console.",
+  "description": "Production-oriented Asana connector for the DOO Builders League \u2014 reusable connector core, five typed actions, thin MCP adapter, and a premium local console.",
   "author": "Idrees Khaled",
   "license": "MIT",
   "engines": {
@@ -14,6 +14,7 @@
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
+    "setup": "tsx scripts/setup-env.ts",
     "dev": "concurrently -n api,web -c magenta,cyan \"npm:dev:api\" \"npm:dev:frontend\"",
     "dev:api": "tsx watch server/index.ts",
     "dev:frontend": "npm run dev --workspace frontend",
