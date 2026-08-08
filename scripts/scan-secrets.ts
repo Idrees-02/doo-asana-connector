@@ -151,8 +151,11 @@ function scanFile(file: string): Finding[] {
   for (const rule of RULES) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? '';
-      // Honour an explicit reviewer escape hatch.
+      // Reviewer escape hatch, honoured on the matching line or the one above
+      // it (the familiar `-next-line` convention), so the marker can sit in a
+      // comment rather than being wedged into the offending expression.
       if (line.includes('secrets-scan-ignore')) continue;
+      if ((lines[i - 1] ?? '').includes('secrets-scan-ignore')) continue;
 
       rule.pattern.lastIndex = 0;
       let match: RegExpExecArray | null;
