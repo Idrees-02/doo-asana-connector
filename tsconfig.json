@@ -46,6 +46,6 @@
     "resolveJsonModule": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*", "server/**/*", "mcp/**/*", "tests/**/*", "scripts/**/*"],
+  "include": ["src/**/*", "server/**/*", "mcp/**/*", "tests/**/*", "scripts/**/*", "examples/**/*"],
   "exclude": ["node_modules", "dist", "frontend"]
 }

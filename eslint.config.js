@@ -77,8 +77,9 @@ export default tseslint.config(
     },
   },
   {
-    // Scripts and tests are allowed to talk to stdout directly.
-    files: ['scripts/**/*.ts', 'tests/**/*.ts', 'mcp/**/*.ts'],
+    // Scripts, examples and tests are allowed to talk to stdout directly:
+    // printing IS their output, not incidental logging.
+    files: ['scripts/**/*.ts', 'tests/**/*.ts', 'mcp/**/*.ts', 'examples/**/*.ts'],
     rules: {
       'no-console': 'off',
     },

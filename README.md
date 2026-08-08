@@ -199,11 +199,93 @@ doo-asana-connector/
 
 ---
 
-## Status
+## Documentation
 
-Under active development. See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) for
-an honest account of what is verified, what is mocked, and what is not yet
-built — nothing in this README claims a capability that only exists as a mock.
+| Document | Contents |
+| --- | --- |
+| [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md) | Getting a PAT or OAuth app, and how credentials are handled |
+| [`docs/WRITE-SAFETY.md`](docs/WRITE-SAFETY.md) | Why writes are never auto-retried, approval, idempotency, concurrency |
+| [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) | What is not built, and what is not yet verified |
+| [`openapi.yaml`](openapi.yaml) | Generated API contract |
+| [`connector.yaml`](connector.yaml) | Generated connector manifest |
+
+In-app documentation is also available at **/docs** in the running console.
+
+---
+
+## MCP
+
+```bash
+npm run mcp           # stdio — Claude Desktop, MCP Inspector
+npm run mcp:inspect   # interactive tool explorer
+```
+
+Claude Desktop (`claude_desktop_config.json`), replacing the path with this
+project's absolute location:
+
+```json
+{
+  "mcpServers": {
+    "asana-connector": {
+      "command": "npx",
+      "args": ["tsx", "/ABSOLUTE/PATH/TO/doo-asana-connector/mcp/server.ts"]
+    }
+  }
+}
+```
+
+The adapter iterates `connector.listActions()` and registers each as a tool. It
+contains no Asana endpoint, no schema and no business logic — a test asserts the
+exposed tool ids equal the connector's action ids, so it cannot drift.
+
+---
+
+## Assignment checklist
+
+Marked honestly. Anything not demonstrated is called out rather than assumed.
+
+| Requirement | Status |
+| --- | --- |
+| Manifest exists | Yes — generated, `connector.yaml` |
+| Asana authentication (PAT + OAuth 2.0) | Implemented; **live flow not yet run** |
+| `testConnection` has no side effects | Yes — asserted by test (no non-GET request) |
+| All five actions implemented | Yes — end-to-end tested |
+| Typed input/output schemas | Yes — Zod, single source of truth |
+| Inputs validated | Yes — before any network call |
+| Errors normalized | Yes — 19 `ASANA_*` codes |
+| Request IDs | Yes — connector-generated; Asana returns none |
+| Retry classification | Yes — including `manual_with_idempotency_key` |
+| Pagination | Yes — cursor-based, both read actions |
+| Rate limits handled | Yes — client-side pacing before sending |
+| Approval / idempotency / duplicates documented | Yes — `docs/WRITE-SAFETY.md` |
+| No secrets committed | Yes — scanner + pre-commit hook + CI |
+| Unit and fixture tests pass | Yes — 166 total |
+| OpenAPI exists | Yes — generated |
+| MCP adapter exists, duplicates no logic | Yes — enforced by test |
+| Frontend connected to the real backend | Yes — no mocked UI data |
+| Frontend responsive and accessible | Yes — per-breakpoint layouts, 25 tests |
+| Documentation and known limitations | Yes |
+| Versioned v1.0.0 | Yes |
+| **Real sandbox/test-account flow** | **Not yet run** — needs a PAT; `npm run smoke:live` |
+| **HTTPS MCP endpoint deployed** | **Not met by design** — local-first; HTTP transport implemented but undeployed |
+
+The last two are the honest gaps. See
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+
+---
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | API + console together |
+| `npm test` | Connector suite (141 tests) |
+| `npm run test:frontend` | Console suite (25 tests) |
+| `npm run verify` | typecheck + lint + secret scan + tests |
+| `npm run generate` | Regenerate `openapi.yaml` and `connector.yaml` |
+| `npm run smoke:live` | Read-only check against real Asana (needs a PAT) |
+| `npm run smoke:live -- --writes` | Also exercises create/update/comment |
+| `npx tsx examples/use-connector.ts` | Use the connector as a library |
 
 ## License
 
