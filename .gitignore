@@ -49,3 +49,6 @@ frontend/.vite/
 tmp/
 .tmp/
 *.local
+
+# Local editor/agent tooling
+.claude/
