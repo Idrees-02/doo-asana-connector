@@ -1,0 +1,1889 @@
+# GENERATED FILE — DO NOT EDIT BY HAND.
+# Produced by `npm run generate` from src/actions and src/schemas.
+# CI fails if this file is out of date with the code.
+openapi: 3.1.0
+info:
+  title: Asana Connector API
+  version: 1.0.0
+  summary: HTTP API over the DOO Asana connector.
+  description: |-
+    The HTTP adapter over the Asana connector core.
+
+    All five actions are exposed through a single generic route,
+    `POST /api/actions/{actionId}`, so there are no per-action handlers
+    that can drift from the connector.
+
+    ## Authentication
+
+    Credentials live server-side only. The browser never holds an Asana
+    token: it calls this API, and the server attaches authentication.
+    Configure a Personal Access Token or an OAuth app via environment
+    variables — see `.env.example`.
+
+    ## Write safety
+
+    The three write actions require `approved: true`. Failures on
+    non-idempotent writes (create, comment) are reported with
+    `retryStrategy: "manual_with_idempotency_key"` and are never retried
+    automatically, because a timed-out create may already have succeeded.
+
+    ## Errors
+
+    Every failure uses one normalized envelope with a stable `code`,
+    a `requestId`, and retry classification. Stack traces and tokens are
+    never included.
+  contact:
+    name: Idrees Khaled
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:8787
+    description: Local development
+  - url: "{baseUrl}"
+    description: Deployed
+    variables:
+      baseUrl:
+        default: http://localhost:8787
+tags:
+  - name: projects
+    description: Asana project operations
+  - name: tasks
+    description: Asana task operations
+  - name: comments
+    description: Asana task comments (stories)
+  - name: connector
+    description: Connector metadata and connection testing
+  - name: operations
+    description: Health, metrics and activity
+paths:
+  /api/actions/asana.list_projects:
+    post:
+      operationId: asana_list_projects
+      summary: List Projects
+      description: >-
+        Fetch the Asana projects visible to the authenticated account, with pagination.
+
+
+        **Type:** READ · **Risk:** low
+
+        **Asana endpoints:** GET /projects, GET /workspaces
+
+        **Scopes:** projects:read, workspaces:read
+
+
+        **Duplicate behaviour:** None. Reads have no side effects, so repeating this action changes
+        nothing.
+
+        **Retry behaviour:** Safe to retry automatically. The client retries 429 and 5xx up to 3
+        attempts with backoff, honouring Retry-After.
+
+        **Idempotency:** Not applicable — this action never modifies data.
+      tags:
+        - projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input
+              properties:
+                input:
+                  $schema: https://json-schema.org/draft/2020-12/schema
+                  type: object
+                  properties:
+                    limit:
+                      default: 50
+                      description: Results per page (1–100). Defaults to 50.
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                    cursor:
+                      description: Opaque pagination cursor from a previous response. Asana only accepts cursors it issued
+                        — a hand-constructed value will be rejected.
+                      type: string
+                      minLength: 1
+                    workspace:
+                      description: "Workspace gid to list projects from. Optional: if the account has exactly one
+                        workspace it is resolved automatically."
+                      type: string
+                      minLength: 1
+                      pattern: ^\d+$
+                    archived:
+                      description: Filter by archived state. Omit to return both archived and active projects.
+                      type: boolean
+            examples:
+              example1:
+                summary: First page
+                description: Resolves the workspace automatically.
+                value:
+                  input: {}
+              example2:
+                summary: Active projects in a workspace
+                value:
+                  input:
+                    workspace: "1201234567890123"
+                    archived: false
+                    limit: 25
+              example3:
+                summary: Next page
+                description: Cursors must come from a previous response.
+                value:
+                  input:
+                    cursor: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9
+      responses:
+        "200":
+          description: The action completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - data
+                  - meta
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      projects:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: Asana project gid.
+                            name:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                            archived:
+                              anyOf:
+                                - type: boolean
+                                - type: "null"
+                              description: Null when Asana did not return the field.
+                            color:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                            notes:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                            url:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                              description: Permalink to the project in the Asana web app.
+                            workspace:
+                              anyOf:
+                                - type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                    name:
+                                      anyOf:
+                                        - type: string
+                                        - type: "null"
+                                  required:
+                                    - id
+                                    - name
+                                  additionalProperties: false
+                                  description: A reference to another Asana object.
+                                - type: "null"
+                            owner:
+                              anyOf:
+                                - type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                    name:
+                                      anyOf:
+                                        - type: string
+                                        - type: "null"
+                                  required:
+                                    - id
+                                    - name
+                                  additionalProperties: false
+                                  description: A reference to another Asana object.
+                                - type: "null"
+                            team:
+                              anyOf:
+                                - type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                    name:
+                                      anyOf:
+                                        - type: string
+                                        - type: "null"
+                                  required:
+                                    - id
+                                    - name
+                                  additionalProperties: false
+                                  description: A reference to another Asana object.
+                                - type: "null"
+                            dueOn:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                            createdAt:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                            modifiedAt:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                          required:
+                            - id
+                            - name
+                            - archived
+                            - color
+                            - notes
+                            - url
+                            - workspace
+                            - owner
+                            - team
+                            - dueOn
+                            - createdAt
+                            - modifiedAt
+                          additionalProperties: false
+                          description: An Asana project.
+                      workspace:
+                        anyOf:
+                          - type: object
+                            properties:
+                              id:
+                                type: string
+                              name:
+                                anyOf:
+                                  - type: string
+                                  - type: "null"
+                            required:
+                              - id
+                              - name
+                            additionalProperties: false
+                          - type: "null"
+                        description: The workspace that was queried, including one resolved automatically.
+                      pagination:
+                        type: object
+                        properties:
+                          nextCursor:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Pass as `cursor` to fetch the next page. Null when there are no more results.
+                          hasMore:
+                            type: boolean
+                            description: Whether another page is available.
+                          pageSize:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                            description: The page size that was applied.
+                          returned:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                            description: Number of items in this page.
+                        required:
+                          - nextCursor
+                          - hasMore
+                          - pageSize
+                          - returned
+                        additionalProperties: false
+                        description: Cursor pagination metadata.
+                    required:
+                      - projects
+                      - workspace
+                      - pagination
+                    additionalProperties: false
+                  meta:
+                    $ref: "#/components/schemas/ExecutionMeta"
+        "400":
+          description: Input failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Asana authentication is invalid or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: The action or the referenced Asana object was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The task changed after it was loaded (stale-write guard).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Asana rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Asana returned an upstream error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "504":
+          description: The request to Asana timed out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/actions/asana.list_project_tasks:
+    post:
+      operationId: asana_list_project_tasks
+      summary: List Project Tasks
+      description: >-
+        Fetch tasks in an Asana project, with optional completion filtering and pagination.
+
+
+        **Type:** READ · **Risk:** low
+
+        **Asana endpoints:** GET /projects/{project_gid}/tasks
+
+        **Scopes:** tasks:read
+
+
+        **Duplicate behaviour:** None. Reads have no side effects.
+
+        **Retry behaviour:** Safe to retry automatically. The client retries 429 and 5xx up to 3
+        attempts with backoff, honouring Retry-After.
+
+        **Idempotency:** Not applicable — this action never modifies data.
+      tags:
+        - tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input
+              properties:
+                input:
+                  $schema: https://json-schema.org/draft/2020-12/schema
+                  type: object
+                  properties:
+                    limit:
+                      default: 50
+                      description: Results per page (1–100). Defaults to 50.
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                    cursor:
+                      description: Opaque pagination cursor from a previous response. Asana only accepts cursors it issued
+                        — a hand-constructed value will be rejected.
+                      type: string
+                      minLength: 1
+                    projectId:
+                      type: string
+                      minLength: 1
+                      pattern: ^\d+$
+                      description: The Asana project gid whose tasks should be returned.
+                    includeCompleted:
+                      default: true
+                      description: When false, only incomplete tasks are returned (implemented via completed_since=now).
+                      type: boolean
+                    completedSince:
+                      description: Return incomplete tasks plus those completed since this time. Takes precedence over
+                        includeCompleted.
+                      anyOf:
+                        - type: string
+                          description: ISO 8601 date-time, e.g. "2026-03-01T17:00:00Z".
+                        - type: string
+                          const: now
+                  required:
+                    - projectId
+                  description: Tasks for a single Asana project.
+            examples:
+              example1:
+                summary: All tasks in a project
+                value:
+                  input:
+                    projectId: "1201234567890123"
+              example2:
+                summary: Incomplete tasks only
+                value:
+                  input:
+                    projectId: "1201234567890123"
+                    includeCompleted: false
+                    limit: 25
+              example3:
+                summary: Recently completed and open tasks
+                value:
+                  input:
+                    projectId: "1201234567890123"
+                    completedSince: 2026-08-01T00:00:00Z
+      responses:
+        "200":
+          description: The action completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - data
+                  - meta
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      tasks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: Asana task gid.
+                            name:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                            notes:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                              description: Plain-text task description.
+                            completed:
+                              anyOf:
+                                - type: boolean
+                                - type: "null"
+                            completedAt:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                            dueOn:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                              description: Due date, YYYY-MM-DD.
+                            dueAt:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                              description: Due date-time, ISO 8601. Mutually exclusive with dueOn.
+                            startOn:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                            assignee:
+                              anyOf:
+                                - type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                    name:
+                                      anyOf:
+                                        - type: string
+                                        - type: "null"
+                                    email:
+                                      anyOf:
+                                        - type: string
+                                        - type: "null"
+                                  required:
+                                    - id
+                                    - name
+                                    - email
+                                  additionalProperties: false
+                                  description: An Asana user.
+                                - type: "null"
+                            workspace:
+                              anyOf:
+                                - type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                    name:
+                                      anyOf:
+                                        - type: string
+                                        - type: "null"
+                                  required:
+                                    - id
+                                    - name
+                                  additionalProperties: false
+                                  description: A reference to another Asana object.
+                                - type: "null"
+                            parent:
+                              anyOf:
+                                - type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                    name:
+                                      anyOf:
+                                        - type: string
+                                        - type: "null"
+                                  required:
+                                    - id
+                                    - name
+                                  additionalProperties: false
+                                  description: A reference to another Asana object.
+                                - type: "null"
+                            projects:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                additionalProperties: false
+                                description: A reference to another Asana object.
+                            tags:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                additionalProperties: false
+                                description: A reference to another Asana object.
+                            subtaskCount:
+                              anyOf:
+                                - type: number
+                                - type: "null"
+                            resourceSubtype:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                              description: default_task | milestone | approval | custom.
+                            url:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                              description: Permalink to the task in the Asana web app.
+                            createdAt:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                            modifiedAt:
+                              anyOf:
+                                - type: string
+                                - type: "null"
+                              description: Last modification time. Pass back as `ifUnmodifiedSince` on update to guard against
+                                overwriting a concurrent edit.
+                          required:
+                            - id
+                            - name
+                            - notes
+                            - completed
+                            - completedAt
+                            - dueOn
+                            - dueAt
+                            - startOn
+                            - assignee
+                            - workspace
+                            - parent
+                            - projects
+                            - tags
+                            - subtaskCount
+                            - resourceSubtype
+                            - url
+                            - createdAt
+                            - modifiedAt
+                          additionalProperties: false
+                          description: An Asana task.
+                      projectId:
+                        type: string
+                      pagination:
+                        type: object
+                        properties:
+                          nextCursor:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Pass as `cursor` to fetch the next page. Null when there are no more results.
+                          hasMore:
+                            type: boolean
+                            description: Whether another page is available.
+                          pageSize:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                            description: The page size that was applied.
+                          returned:
+                            type: integer
+                            minimum: -9007199254740991
+                            maximum: 9007199254740991
+                            description: Number of items in this page.
+                        required:
+                          - nextCursor
+                          - hasMore
+                          - pageSize
+                          - returned
+                        additionalProperties: false
+                        description: Cursor pagination metadata.
+                    required:
+                      - tasks
+                      - projectId
+                      - pagination
+                    additionalProperties: false
+                  meta:
+                    $ref: "#/components/schemas/ExecutionMeta"
+        "400":
+          description: Input failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Asana authentication is invalid or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Permission denied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: The action or the referenced Asana object was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The task changed after it was loaded (stale-write guard).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Asana rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Asana returned an upstream error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "504":
+          description: The request to Asana timed out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/actions/asana.create_task:
+    post:
+      operationId: asana_create_task
+      summary: Create Task
+      description: >-
+        Create a new task in an Asana project or workspace.
+
+
+        **Type:** WRITE · **Risk:** medium
+
+        **Asana endpoints:** POST /tasks
+
+        **Scopes:** tasks:write
+
+
+        **Duplicate behaviour:** Asana has no server-side deduplication: calling this twice creates
+        two separate tasks with different gids.
+
+        **Retry behaviour:** NEVER retried automatically. A failed create may already have succeeded
+        (particularly on timeout), so the connector reports
+        retryStrategy=manual_with_idempotency_key and leaves the decision to the caller.
+
+        **Idempotency:** Supply idempotencyKey to make deliberate retries safe: a repeated key
+        replays the original result instead of creating a second task. Process-local and 15-minute
+        TTL — it does not survive a restart.
+      tags:
+        - tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input
+                - approved
+              properties:
+                input:
+                  $schema: https://json-schema.org/draft/2020-12/schema
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 1024
+                      description: The task title.
+                    notes:
+                      description: Plain-text task description.
+                      type: string
+                      maxLength: 65535
+                    projectId:
+                      description: Project to add the task to. Either projectId or workspace is required.
+                      type: string
+                      minLength: 1
+                      pattern: ^\d+$
+                    workspace:
+                      description: Workspace to create the task in. Required when projectId is omitted.
+                      type: string
+                      minLength: 1
+                      pattern: ^\d+$
+                    assignee:
+                      description: Assignee as a user gid, an email address, or the literal "me".
+                      type: string
+                      minLength: 1
+                    dueOn:
+                      description: Due date (YYYY-MM-DD). Mutually exclusive with dueAt.
+                      type: string
+                      pattern: ^\d{4}-\d{2}-\d{2}$
+                    dueAt:
+                      description: Due date-time (ISO 8601). Mutually exclusive with dueOn.
+                      type: string
+                    followers:
+                      description: User gids or email addresses to add as followers.
+                      maxItems: 50
+                      type: array
+                      items:
+                        type: string
+                        minLength: 1
+                  required:
+                    - name
+                approved:
+                  type: boolean
+                  description: Must be true. This action modifies data in Asana and will not run without explicit
+                    approval.
+                idempotencyKey:
+                  type: string
+                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
+                    15-minute TTL.
+            examples:
+              example1:
+                summary: Minimal task in a project
+                value:
+                  input:
+                    projectId: "1201234567890123"
+                    name: Prepare launch documentation
+                  approved: true
+              example2:
+                summary: Full task
+                value:
+                  input:
+                    projectId: "1201234567890123"
+                    name: Validate MCP endpoint
+                    notes: Confirm all five tools are exposed and schemas match the connector.
+                    assignee: me
+                    dueOn: 2026-09-01
+                  approved: true
+      responses:
+        "200":
+          description: The action completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - data
+                  - meta
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      task:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            description: Asana task gid.
+                          name:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          notes:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Plain-text task description.
+                          completed:
+                            anyOf:
+                              - type: boolean
+                              - type: "null"
+                          completedAt:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          dueOn:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Due date, YYYY-MM-DD.
+                          dueAt:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Due date-time, ISO 8601. Mutually exclusive with dueOn.
+                          startOn:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          assignee:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                  email:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                  - email
+                                additionalProperties: false
+                                description: An Asana user.
+                              - type: "null"
+                          workspace:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                additionalProperties: false
+                                description: A reference to another Asana object.
+                              - type: "null"
+                          parent:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                additionalProperties: false
+                                description: A reference to another Asana object.
+                              - type: "null"
+                          projects:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                name:
+                                  anyOf:
+                                    - type: string
+                                    - type: "null"
+                              required:
+                                - id
+                                - name
+                              additionalProperties: false
+                              description: A reference to another Asana object.
+                          tags:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                name:
+                                  anyOf:
+                                    - type: string
+                                    - type: "null"
+                              required:
+                                - id
+                                - name
+                              additionalProperties: false
+                              description: A reference to another Asana object.
+                          subtaskCount:
+                            anyOf:
+                              - type: number
+                              - type: "null"
+                          resourceSubtype:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: default_task | milestone | approval | custom.
+                          url:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Permalink to the task in the Asana web app.
+                          createdAt:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          modifiedAt:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Last modification time. Pass back as `ifUnmodifiedSince` on update to guard against
+                              overwriting a concurrent edit.
+                        required:
+                          - id
+                          - name
+                          - notes
+                          - completed
+                          - completedAt
+                          - dueOn
+                          - dueAt
+                          - startOn
+                          - assignee
+                          - workspace
+                          - parent
+                          - projects
+                          - tags
+                          - subtaskCount
+                          - resourceSubtype
+                          - url
+                          - createdAt
+                          - modifiedAt
+                        additionalProperties: false
+                        description: An Asana task.
+                      created:
+                        type: boolean
+                        const: true
+                    required:
+                      - task
+                      - created
+                    additionalProperties: false
+                  meta:
+                    $ref: "#/components/schemas/ExecutionMeta"
+        "400":
+          description: Input failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Asana authentication is invalid or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Permission denied, or the required approval flag was not set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: The action or the referenced Asana object was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The task changed after it was loaded (stale-write guard).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Asana rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Asana returned an upstream error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "504":
+          description: The request to Asana timed out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/actions/asana.update_task:
+    post:
+      operationId: asana_update_task
+      summary: Update Task
+      description: >-
+        Update selected fields on an Asana task. Omitted fields are left untouched; an explicit null
+        clears a field.
+
+
+        **Type:** WRITE · **Risk:** medium
+
+        **Asana endpoints:** PUT /tasks/{task_gid}, GET /tasks/{task_gid}
+
+        **Scopes:** tasks:write, tasks:read
+
+
+        **Duplicate behaviour:** Applying the same patch twice is harmless: the task ends in the
+        same state, and no new object is created.
+
+        **Retry behaviour:** Safe to retry, because the operation is idempotent. The client retries
+        429 and 5xx up to 2 further attempts, honouring Retry-After.
+
+        **Idempotency:** Naturally idempotent, so an idempotency key is optional. Use
+        ifUnmodifiedSince to avoid overwriting a concurrent edit.
+      tags:
+        - tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input
+                - approved
+              properties:
+                input:
+                  $schema: https://json-schema.org/draft/2020-12/schema
+                  type: object
+                  properties:
+                    taskId:
+                      type: string
+                      minLength: 1
+                      pattern: ^\d+$
+                      description: The Asana task gid to update.
+                    patch:
+                      type: object
+                      properties:
+                        name:
+                          description: New task title.
+                          type: string
+                          minLength: 1
+                          maxLength: 1024
+                        notes:
+                          description: New description. Null clears it.
+                          anyOf:
+                            - type: string
+                              maxLength: 65535
+                            - type: "null"
+                        assignee:
+                          description: User gid, email, or "me". Null unassigns the task.
+                          anyOf:
+                            - type: string
+                              minLength: 1
+                            - type: "null"
+                        dueOn:
+                          description: Due date (YYYY-MM-DD). Null clears it.
+                          anyOf:
+                            - type: string
+                              pattern: ^\d{4}-\d{2}-\d{2}$
+                              description: Date in YYYY-MM-DD format.
+                            - type: "null"
+                        dueAt:
+                          description: Due date-time (ISO 8601). Null clears it.
+                          anyOf:
+                            - type: string
+                              description: ISO 8601 date-time, e.g. "2026-03-01T17:00:00Z".
+                            - type: "null"
+                        completed:
+                          description: Completion state.
+                          type: boolean
+                      description: Fields to change. Omitted fields are left untouched; an explicit null clears the field.
+                    ifUnmodifiedSince:
+                      description: The task's modifiedAt value when it was loaded. When supplied, the update is rejected
+                        with ASANA_CONFLICT if the task changed since then, preventing a silent
+                        overwrite of a concurrent edit.
+                      type: string
+                  required:
+                    - taskId
+                    - patch
+                approved:
+                  type: boolean
+                  description: Must be true. This action modifies data in Asana and will not run without explicit
+                    approval.
+                idempotencyKey:
+                  type: string
+                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
+                    15-minute TTL.
+            examples:
+              example1:
+                summary: Rename a task
+                value:
+                  input:
+                    taskId: "1201234567890123"
+                    patch:
+                      name: Updated title
+                  approved: true
+              example2:
+                summary: Mark complete
+                value:
+                  input:
+                    taskId: "1201234567890123"
+                    patch:
+                      completed: true
+                  approved: true
+              example3:
+                summary: Clear the due date
+                description: An explicit null clears the field; omitting it would leave it unchanged.
+                value:
+                  input:
+                    taskId: "1201234567890123"
+                    patch:
+                      dueOn: null
+                  approved: true
+              example4:
+                summary: Safe edit with concurrency check
+                value:
+                  input:
+                    taskId: "1201234567890123"
+                    patch:
+                      notes: Revised description
+                    ifUnmodifiedSince: 2026-08-08T10:15:00.000Z
+                  approved: true
+      responses:
+        "200":
+          description: The action completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - data
+                  - meta
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      task:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            description: Asana task gid.
+                          name:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          notes:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Plain-text task description.
+                          completed:
+                            anyOf:
+                              - type: boolean
+                              - type: "null"
+                          completedAt:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          dueOn:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Due date, YYYY-MM-DD.
+                          dueAt:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Due date-time, ISO 8601. Mutually exclusive with dueOn.
+                          startOn:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          assignee:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                  email:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                  - email
+                                additionalProperties: false
+                                description: An Asana user.
+                              - type: "null"
+                          workspace:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                additionalProperties: false
+                                description: A reference to another Asana object.
+                              - type: "null"
+                          parent:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                additionalProperties: false
+                                description: A reference to another Asana object.
+                              - type: "null"
+                          projects:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                name:
+                                  anyOf:
+                                    - type: string
+                                    - type: "null"
+                              required:
+                                - id
+                                - name
+                              additionalProperties: false
+                              description: A reference to another Asana object.
+                          tags:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                name:
+                                  anyOf:
+                                    - type: string
+                                    - type: "null"
+                              required:
+                                - id
+                                - name
+                              additionalProperties: false
+                              description: A reference to another Asana object.
+                          subtaskCount:
+                            anyOf:
+                              - type: number
+                              - type: "null"
+                          resourceSubtype:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: default_task | milestone | approval | custom.
+                          url:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Permalink to the task in the Asana web app.
+                          createdAt:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          modifiedAt:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: Last modification time. Pass back as `ifUnmodifiedSince` on update to guard against
+                              overwriting a concurrent edit.
+                        required:
+                          - id
+                          - name
+                          - notes
+                          - completed
+                          - completedAt
+                          - dueOn
+                          - dueAt
+                          - startOn
+                          - assignee
+                          - workspace
+                          - parent
+                          - projects
+                          - tags
+                          - subtaskCount
+                          - resourceSubtype
+                          - url
+                          - createdAt
+                          - modifiedAt
+                        additionalProperties: false
+                        description: An Asana task.
+                      updatedFields:
+                        type: array
+                        items:
+                          type: string
+                        description: The patch keys that were actually sent to Asana.
+                    required:
+                      - task
+                      - updatedFields
+                    additionalProperties: false
+                  meta:
+                    $ref: "#/components/schemas/ExecutionMeta"
+        "400":
+          description: Input failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Asana authentication is invalid or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Permission denied, or the required approval flag was not set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: The action or the referenced Asana object was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The task changed after it was loaded (stale-write guard).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Asana rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Asana returned an upstream error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "504":
+          description: The request to Asana timed out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/actions/asana.add_comment:
+    post:
+      operationId: asana_add_comment
+      summary: Add Comment
+      description: >-
+        Post a plain-text comment onto an Asana task.
+
+
+        **Type:** WRITE · **Risk:** medium
+
+        **Asana endpoints:** POST /tasks/{task_gid}/stories
+
+        **Scopes:** stories:write
+
+
+        **Duplicate behaviour:** Calling this twice posts two separate comments. They are visible to
+        every task follower, and this connector cannot delete them.
+
+        **Retry behaviour:** NEVER retried automatically. A failed request may already have posted
+        the comment, so the connector reports retryStrategy=manual_with_idempotency_key rather than
+        risking a double post.
+
+        **Idempotency:** Supply idempotencyKey to make deliberate retries safe: a repeated key
+        replays the original result instead of posting again. Process-local, 15-minute TTL. The
+        console additionally warns before re-posting identical text within 60 seconds.
+      tags:
+        - comments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input
+                - approved
+              properties:
+                input:
+                  $schema: https://json-schema.org/draft/2020-12/schema
+                  type: object
+                  properties:
+                    taskId:
+                      type: string
+                      minLength: 1
+                      pattern: ^\d+$
+                      description: The Asana task gid to comment on.
+                    text:
+                      description: The plain-text comment body. Leading and trailing whitespace is trimmed.
+                      type: string
+                  required:
+                    - taskId
+                    - text
+                approved:
+                  type: boolean
+                  description: Must be true. This action modifies data in Asana and will not run without explicit
+                    approval.
+                idempotencyKey:
+                  type: string
+                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
+                    15-minute TTL.
+            examples:
+              example1:
+                summary: Add a comment
+                value:
+                  input:
+                    taskId: "1201234567890123"
+                    text: Verified against the sandbox workspace.
+                  approved: true
+      responses:
+        "200":
+          description: The action completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - data
+                  - meta
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                  data:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      comment:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            description: Asana story gid.
+                          text:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          createdAt:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          createdBy:
+                            anyOf:
+                              - type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    anyOf:
+                                      - type: string
+                                      - type: "null"
+                                required:
+                                  - id
+                                  - name
+                                additionalProperties: false
+                                description: A reference to another Asana object.
+                              - type: "null"
+                          type:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                            description: '"comment" or "system".'
+                          resourceSubtype:
+                            anyOf:
+                              - type: string
+                              - type: "null"
+                          isPinned:
+                            anyOf:
+                              - type: boolean
+                              - type: "null"
+                        required:
+                          - id
+                          - text
+                          - createdAt
+                          - createdBy
+                          - type
+                          - resourceSubtype
+                          - isPinned
+                        additionalProperties: false
+                        description: A comment (Asana "story") on a task.
+                      taskId:
+                        type: string
+                    required:
+                      - comment
+                      - taskId
+                    additionalProperties: false
+                  meta:
+                    $ref: "#/components/schemas/ExecutionMeta"
+        "400":
+          description: Input failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Asana authentication is invalid or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Permission denied, or the required approval flag was not set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: The action or the referenced Asana object was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The task changed after it was loaded (stale-write guard).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Asana rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Asana returned an upstream error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "504":
+          description: The request to Asana timed out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/connector/status:
+    get:
+      operationId: getStatus
+      summary: Connector status and safe configuration
+      description: Returns connector identity, resolved run mode and configuration. Contains no credential
+        values by construction.
+      tags:
+        - connector
+      responses:
+        "200":
+          description: Current status.
+  /api/connector/test:
+    post:
+      operationId: testConnection
+      summary: Verify authentication (read-only)
+      description: Performs a single GET /users/me against Asana. Creates nothing, modifies nothing,
+        deletes nothing. Never returns a token.
+      tags:
+        - connector
+      responses:
+        "200":
+          description: Connection test result.
+  /api/connector/manifest:
+    get:
+      operationId: getManifest
+      summary: Connector manifest
+      tags:
+        - connector
+      responses:
+        "200":
+          description: The connector manifest.
+  /api/connector/schemas/{actionId}:
+    get:
+      operationId: getActionSchema
+      summary: JSON Schema for one action
+      tags:
+        - connector
+      parameters:
+        - name: actionId
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - asana.list_projects
+              - asana.list_project_tasks
+              - asana.create_task
+              - asana.update_task
+              - asana.add_comment
+      responses:
+        "200":
+          description: Input and output JSON Schema.
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Component health
+      description: Read-only. Health checks never modify Asana data.
+      tags:
+        - operations
+      responses:
+        "200":
+          description: All components healthy.
+        "503":
+          description: One or more components are degraded or unauthenticated.
+  /api/activity:
+    get:
+      operationId: listActivity
+      summary: Recent executions
+      description: Redacted request/response history from an in-memory ring buffer.
+      tags:
+        - operations
+      responses:
+        "200":
+          description: Recent activity entries.
+  /api/metrics:
+    get:
+      operationId: getMetrics
+      summary: Real request metrics
+      description: Counters computed from recorded activity. Returns null rather than zero when nothing
+        has run, so "no data" is distinguishable from "all failed".
+      tags:
+        - operations
+      responses:
+        "200":
+          description: Metrics.
+components:
+  schemas:
+    ExecutionMeta:
+      type: object
+      description: Execution metadata attached to every response.
+      required:
+        - requestId
+        - actionId
+        - provider
+        - mode
+        - demoData
+        - durationMs
+      properties:
+        requestId:
+          type: string
+          description: Connector-generated. Asana does not return a request id.
+        actionId:
+          type: string
+        provider:
+          type: string
+          enum:
+            - asana
+        mode:
+          type: string
+          enum:
+            - live
+            - demo
+          description: Whether this result came from Asana or the in-memory demo API.
+        demoData:
+          type: boolean
+          description: True when the payload is synthetic. Never true for live Asana data.
+        startedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+        upstreamCalls:
+          type: integer
+        attempts:
+          type: integer
+          description: Attempts including retries.
+        deprecations:
+          type: array
+          description: Notices captured from Asana-Change response headers.
+          items:
+            type: object
+    ConnectorError:
+      type: object
+      description: The single normalized error shape returned by every endpoint.
+      required:
+        - code
+        - message
+        - provider
+        - requestId
+        - retryable
+        - retryStrategy
+      properties:
+        code:
+          type: string
+          enum:
+            - ASANA_VALIDATION_ERROR
+            - ASANA_BAD_REQUEST
+            - ASANA_AUTHENTICATION_ERROR
+            - ASANA_PAYMENT_REQUIRED
+            - ASANA_PERMISSION_DENIED
+            - ASANA_NOT_FOUND
+            - ASANA_CONFLICT
+            - ASANA_UNAVAILABLE_LEGAL
+            - ASANA_RATE_LIMITED
+            - ASANA_SERVER_ERROR
+            - ASANA_BAD_GATEWAY
+            - ASANA_SERVICE_UNAVAILABLE
+            - ASANA_TIMEOUT
+            - ASANA_NETWORK_ERROR
+            - ASANA_APPROVAL_REQUIRED
+            - ASANA_UNKNOWN_ACTION
+            - ASANA_INVALID_RESPONSE
+            - ASANA_UNKNOWN_ERROR
+        message:
+          type: string
+          description: Human-readable. Redacted; never contains a token.
+        provider:
+          type: string
+          enum:
+            - asana
+        action:
+          type:
+            - string
+            - "null"
+        requestId:
+          type: string
+        httpStatus:
+          type:
+            - integer
+            - "null"
+        retryable:
+          type: boolean
+        retryStrategy:
+          type: string
+          enum:
+            - none
+            - immediate
+            - backoff
+            - after_delay
+            - manual_with_idempotency_key
+          description: How to respond. "manual_with_idempotency_key" means the write may already have taken
+            effect and must not be blindly retried.
+        retryAfterMs:
+          type:
+            - integer
+            - "null"
+        severity:
+          type: string
+          enum:
+            - warning
+            - error
+        guidance:
+          type: string
+          description: Suggested next step, in plain language.
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+              reason:
+                type: string
+        providerPhrase:
+          type:
+            - string
+            - "null"
+          description: Asana's diagnostic phrase, present on 500s.
+        occurredAt:
+          type: string
+          format: date-time
+    ErrorEnvelope:
+      type: object
+      required:
+        - ok
+        - error
+      properties:
+        ok:
+          type: boolean
+          enum:
+            - false
+        error:
+          $ref: "#/components/schemas/ConnectorError"
+        meta:
+          $ref: "#/components/schemas/ExecutionMeta"
+  securitySchemes:
+    serverSideCredential:
+      type: apiKey
+      in: header
+      name: x-not-used
+      description: This API does not accept Asana credentials from the client. The server holds the
+        Personal Access Token or OAuth tokens and attaches them upstream, so the browser never
+        handles a secret.

@@ -70,14 +70,25 @@ export interface ConnectorManifest {
 }
 
 /**
- * Union of every scope any action needs.
+ * Scopes needed by connector-level operations that are not actions.
  *
- * Computed, not listed, so the connector cannot silently request more
- * permission than its actions actually use. Notably absent: any `:delete`
- * scope — deletion is not one of the five assigned actions.
+ * `testConnection` calls GET /users/me, which requires `users:read`. Deriving
+ * scopes from the action registry alone would omit it, and an OAuth grant
+ * without it would authorize successfully and then fail the connection test —
+ * a confusing failure precisely when the user is trying to verify setup.
+ */
+const CONNECTOR_SCOPES = ['users:read'] as const;
+
+/**
+ * Union of every scope the connector actually needs.
+ *
+ * Computed rather than hand-listed, so it cannot silently request more
+ * permission than is used. Notably absent: any `:delete` scope — deletion is
+ * not one of the five assigned actions, so the connector never asks for the
+ * ability to do it.
  */
 function requiredScopes(): readonly string[] {
-  return [...new Set(ACTIONS.flatMap((a) => a.scopes))].sort();
+  return [...new Set([...ACTIONS.flatMap((a) => a.scopes), ...CONNECTOR_SCOPES])].sort();
 }
 
 export function buildManifest(): ConnectorManifest {

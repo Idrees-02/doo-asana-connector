@@ -1,0 +1,159 @@
+# GENERATED FILE — DO NOT EDIT BY HAND.
+# Produced by `npm run generate` from src/actions and src/schemas.
+# CI fails if this file is out of date with the code.
+provider: asana
+name: asana-connector
+displayName: Asana Connector
+version: 1.0.0
+description: Production-oriented Asana connector providing project and task operations with typed
+  schemas, normalized errors, cursor pagination and rate-limit handling.
+builder: Idrees Khaled
+category: Project Management
+authentication:
+  types:
+    - pat
+    - oauth2
+  default: pat
+  scopes:
+    - projects:read
+    - stories:write
+    - tasks:read
+    - tasks:write
+    - users:read
+    - workspaces:read
+  authorizationUrl: https://app.asana.com/-/oauth_authorize
+  tokenUrl: https://app.asana.com/-/oauth_token
+  revokeUrl: https://app.asana.com/-/oauth_revoke
+  notes: A Personal Access Token carries the full permissions of its creating user; Asana does not
+    scope PATs. OAuth 2.0 supports the granular scopes listed above and is preferred for multi-user
+    deployments.
+capabilities:
+  pagination: cursor
+  rateLimiting: true
+  retries: true
+  idempotencyKeys: true
+  webhooks: false
+  demoMode: true
+  testConnection: true
+rateLimits:
+  freeTierRpm: 150
+  paidTierRpm: 1500
+  concurrentReads: 50
+  concurrentWrites: 15
+  costBased: true
+  notes: "Asana counts rejected requests against the quota, so this connector paces requests
+    client-side before sending rather than reacting to 429 alone. Cost-based limits also apply: wide
+    opt_fields selections consume more quota per request."
+actions:
+  - id: asana.list_projects
+    name: List Projects
+    description: Fetch the Asana projects visible to the authenticated account, with pagination.
+    category: projects
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: true
+    scopes:
+      - projects:read
+      - workspaces:read
+    endpoints:
+      - GET /projects
+      - GET /workspaces
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.list_project_tasks
+    name: List Project Tasks
+    description: Fetch tasks in an Asana project, with optional completion filtering and pagination.
+    category: tasks
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: true
+    scopes:
+      - tasks:read
+    endpoints:
+      - GET /projects/{project_gid}/tasks
+    safety:
+      duplicateBehavior: None. Reads have no side effects.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.create_task
+    name: Create Task
+    description: Create a new task in an Asana project or workspace.
+    category: tasks
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: false
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - POST /tasks
+    safety:
+      duplicateBehavior: "Asana has no server-side deduplication: calling this twice creates two separate
+        tasks with different gids."
+      retryBehavior: NEVER retried automatically. A failed create may already have succeeded (particularly
+        on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
+        the decision to the caller.
+      idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
+        the original result instead of creating a second task. Process-local and 15-minute TTL — it
+        does not survive a restart."
+  - id: asana.update_task
+    name: Update Task
+    description: Update selected fields on an Asana task. Omitted fields are left untouched; an explicit
+      null clears a field.
+    category: tasks
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+      - tasks:read
+    endpoints:
+      - PUT /tasks/{task_gid}
+      - GET /tasks/{task_gid}
+    safety:
+      duplicateBehavior: "Applying the same patch twice is harmless: the task ends in the same state, and
+        no new object is created."
+      retryBehavior: Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up
+        to 2 further attempts, honouring Retry-After.
+      idempotencyBehavior: Naturally idempotent, so an idempotency key is optional. Use ifUnmodifiedSince
+        to avoid overwriting a concurrent edit.
+  - id: asana.add_comment
+    name: Add Comment
+    description: Post a plain-text comment onto an Asana task.
+    category: comments
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: false
+    supportsPagination: false
+    scopes:
+      - stories:write
+    endpoints:
+      - POST /tasks/{task_gid}/stories
+    safety:
+      duplicateBehavior: Calling this twice posts two separate comments. They are visible to every task
+        follower, and this connector cannot delete them.
+      retryBehavior: NEVER retried automatically. A failed request may already have posted the comment, so
+        the connector reports retryStrategy=manual_with_idempotency_key rather than risking a double
+        post.
+      idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
+        the original result instead of posting again. Process-local, 15-minute TTL. The console
+        additionally warns before re-posting identical text within 60 seconds."
+writeActions:
+  - asana.create_task
+  - asana.update_task
+  - asana.add_comment
+readActions:
+  - asana.list_projects
+  - asana.list_project_tasks
