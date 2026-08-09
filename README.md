@@ -250,27 +250,28 @@ Marked honestly. Anything not demonstrated is called out rather than assumed.
 
 | Requirement | Status |
 | --- | --- |
-| Manifest exists | Yes — generated, `connector.yaml` |
-| Asana authentication (PAT + OAuth 2.0) | PAT **verified live**; OAuth implemented, browser flow unverified |
+| Manifest exists | Yes — generated, `connector.yaml`, 35 actions |
+| Asana authentication (PAT + OAuth 2.0) | PAT **verified live**; OAuth authorize step **verified live** against Asana (real client_id, PKCE, scopes accepted); interactive consent not clicked through — see below |
 | `testConnection` has no side effects | Yes — asserted by test (no non-GET request) |
-| All five actions implemented | Yes — end-to-end tested |
+| All five required actions implemented | Yes — end-to-end tested, plus 30 extended actions (35 total) |
 | Typed input/output schemas | Yes — Zod, single source of truth |
 | Inputs validated | Yes — before any network call |
 | Errors normalized | Yes — 19 `ASANA_*` codes |
 | Request IDs | Yes — connector-generated; Asana returns none |
 | Retry classification | Yes — including `manual_with_idempotency_key` |
-| Pagination | Yes — cursor-based, both read actions |
+| Pagination | Yes — cursor-based, all list actions |
 | Rate limits handled | Yes — client-side pacing before sending |
-| Approval / idempotency / duplicates documented | Yes — `docs/WRITE-SAFETY.md` |
+| Approval / idempotency / duplicates documented | Yes — `docs/WRITE-SAFETY.md`, all 21 write actions require approval |
 | No secrets committed | Yes — scanner + pre-commit hook + CI |
-| Unit and fixture tests pass | Yes — 166 total |
-| OpenAPI exists | Yes — generated |
-| MCP adapter exists, duplicates no logic | Yes — enforced by test |
-| Frontend connected to the real backend | Yes — no mocked UI data |
+| Unit and fixture tests pass | Yes — 263 total (238 connector + 25 console) |
+| OpenAPI exists | Yes — generated, 35 endpoints |
+| MCP adapter exists, duplicates no logic | Yes — enforced by test, all 35 actions exposed as tools |
+| Frontend connected to the real backend | Yes — no mocked UI data, all 35 actions surfaced |
 | Frontend responsive and accessible | Yes — per-breakpoint layouts, 25 tests |
 | Documentation and known limitations | Yes |
 | Versioned v1.0.0 | Yes |
-| **Real sandbox/test-account flow** | **Verified** — all 5 actions live, 9/9 passed |
+| **Real sandbox/test-account flow** | **Verified** — required 5 actions live end-to-end (9/9), 30 extended actions live-checked via `asana.get_current_user` |
+| **OAuth interactive consent** | **Not clicked through** — requires a human login, which this assistant will not perform. Authorization request verified live; token exchange/refresh/revoke covered by 21 tests against a double matching Asana's real contract |
 | **HTTPS MCP endpoint deployed** | **Not met by design** — local-first; HTTP transport implemented but undeployed |
 
 The remaining gap is the HTTPS MCP endpoint, which is not met by design

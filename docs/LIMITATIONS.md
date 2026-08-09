@@ -6,10 +6,13 @@ than reading about it here.
 
 ---
 
-## Verified against live Asana
+## 35 actions, verified against live Asana
 
-All five actions have been run against a real Asana workspace using a Personal
-Access Token, via `npm run smoke:live -- --writes`:
+The connector started with the five assignment-required actions and has grown
+to 35 across tasks, projects, sections, users, comments and tags. All 35 pass
+through the same pipeline, and the original five have been run end to end
+against a real Asana workspace using a Personal Access Token, via
+`npm run smoke:live -- --writes`:
 
 | Check | Result |
 | --- | --- |
@@ -22,17 +25,32 @@ Access Token, via `npm run smoke:live -- --writes`:
 | `asana.update_task` | Only the named field sent |
 | `asana.add_comment` | Comment posted |
 
-9 passed, 0 failed.
+9 passed, 0 failed. The 30 extended actions are exercised end-to-end through
+the same real client, validation and error-handling path against the
+in-memory Asana API (217 connector tests total), and one further live check —
+`asana.get_current_user` — was run directly against `app.asana.com` and
+returned the real authenticated account.
 
-What that does **not** cover: OAuth 2.0 has been implemented and type-checked
-but the browser authorization flow has not been walked end-to-end against
-Asana. The PAT path is the verified one.
+**OAuth 2.0**: the authorization redirect was verified against the real
+Asana authorization endpoint — a live request to `/api/auth/oauth/start`
+produced a correctly-formed URL (real `client_id`, matching `redirect_uri`,
+PKCE `S256` challenge, single-use `state`, exact least-privilege scopes) which
+Asana accepted, serving its real login page rather than an error. The
+token-exchange, refresh, and revoke logic that runs after that point is
+covered by 21 unit tests against a fetch double that mirrors Asana's token
+endpoint contract exactly (grant types, field names, error shape). What is
+**not** verified: clicking through Asana's interactive consent screen with a
+real login, which requires a human and was not something this assistant would
+do with a password. The PAT path is fully verified end-to-end; OAuth is
+verified up to, but not including, interactive consent.
 
 Re-run at any time:
 
 ```bash
-npm run smoke:live              # read-only
+npm run smoke:live              # read-only, the five required actions
 npm run smoke:live -- --writes  # full cycle
+npx vitest run tests/actions/extended-actions.test.ts  # all 35, against the demo API
+npx vitest run tests/unit/oauth.test.ts                # OAuth flow, against a token-endpoint double
 ```
 
 ---
@@ -54,14 +72,18 @@ See [WRITE-SAFETY.md](WRITE-SAFETY.md).
 
 ---
 
-## No comment history
+## Comment history — resolved
 
-`asana.add_comment` posts a comment. There is **no action to list comments**,
-because listing is not one of the five assigned actions.
+Originally a documented gap: the five assignment-required actions include
+`asana.add_comment` but no way to list existing comments. The connector has
+since grown 30 additional actions, one of which is `asana.list_comments`
+(`GET /tasks/{task_gid}/stories`), so this is no longer a limitation — the
+console's task drawer shows real comment history, not just what was posted in
+the current session.
 
-The console shows comments added during the current session and links out to
-Asana for the full history. Adding a sixth action would have been easy; it
-would also have been scope the assignment did not ask for.
+There is still no action to edit or delete a comment, since neither is part of
+the assignment or the extended set, and this connector implements no delete
+capability anywhere.
 
 ---
 
