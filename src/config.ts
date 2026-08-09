@@ -79,6 +79,9 @@ const envSchema = z.object({
   PORT: intFromString(1, 65_535, 8787),
   CORS_ORIGIN: z.string().trim().catch('http://localhost:5173'),
   TRUST_PROXY: booleanish.catch(false),
+  // Directory of a built console to serve from this origin. Blank => look for
+  // frontend/dist, which is how a single-service deploy (e.g. Railway) works.
+  WEB_DIST: optionalString,
 
   // MCP -------------------------------------------------------------------
   // stdio is the local default (what the mentor and Claude Desktop use);
@@ -117,6 +120,8 @@ export interface ServerConfig {
   readonly port: number;
   readonly corsOrigin: string;
   readonly trustProxy: boolean;
+  /** Explicit console build directory, when one was configured. */
+  readonly webDist: string | undefined;
 }
 
 export interface McpConfig {
@@ -201,6 +206,7 @@ export function buildConfig(raw: NodeJS.ProcessEnv): AppConfig {
       port: env.PORT,
       corsOrigin: env.CORS_ORIGIN,
       trustProxy: env.TRUST_PROXY,
+      webDist: env.WEB_DIST,
     },
     mcp: {
       transport: env.MCP_TRANSPORT,

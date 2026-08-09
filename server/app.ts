@@ -11,6 +11,9 @@
  * authentication server-side.
  */
 
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -277,6 +280,27 @@ export function createApp(runtime: Bootstrapped): ApiServer {
   registerAuthRoutes(app, runtime);
 
   /* ---------------------------------------------------------------- */
+  /* Console (single-origin deploys)                                   */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * In development Vite serves the console and proxies /api here. In a
+   * deployment there is no Vite, so if a built console is present we serve it
+   * from this same origin — which also makes CORS a non-issue there.
+   */
+  const webDist = resolveWebDist(config.server.webDist);
+
+  if (webDist !== undefined) {
+    logger.info('Serving console', { dir: webDist });
+    app.use(express.static(webDist, { index: false }));
+
+    // SPA fallback: any non-/api GET is a client-side route.
+    app.get(/^(?!\/api\/).*/, (_req, res) => {
+      res.sendFile(path.join(webDist, 'index.html'));
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
   /* Fallbacks                                                         */
   /* ---------------------------------------------------------------- */
 
@@ -297,6 +321,20 @@ export function createApp(runtime: Bootstrapped): ApiServer {
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Locate a built console, if there is one.
+ *
+ * Returns undefined during local development, where Vite owns the console and
+ * `frontend/dist` is usually absent or stale.
+ */
+function resolveWebDist(configured: string | undefined): string | undefined {
+  const candidates = [configured, path.resolve(process.cwd(), 'frontend/dist')].filter(
+    (dir): dir is string => typeof dir === 'string' && dir.length > 0,
+  );
+
+  return candidates.find((dir) => existsSync(path.join(dir, 'index.html')));
+}
 
 /** Map a connector error code to the HTTP status the API should report. */
 function statusForError(code: string): number {
