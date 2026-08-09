@@ -47,15 +47,33 @@ function expectFail(result: ConnectorExecutionResult) {
 /* ========================================================================== */
 
 describe('action registry', () => {
-  it('exposes exactly the five assignment-required actions, correctly named', () => {
-    // Guards against a rename or an accidental sixth action being added.
-    expect(connector.listActions().map((a) => a.id)).toEqual([...REQUIRED_ACTION_IDS]);
+  it('exposes the five assignment-required actions first, correctly named', () => {
+    // Guards against a rename, a removal, or a reorder. Additional actions
+    // may follow; these five may never move or change.
+    expect(connector.listActions().slice(0, 5).map((a) => a.id)).toEqual([
+      ...REQUIRED_ACTION_IDS,
+    ]);
   });
 
-  it('never exposes a delete action', () => {
-    // Delete is not one of the assigned actions and must not appear anywhere.
+  it('exposes all 35 actions with unique ids', () => {
     const ids = connector.listActions().map((a) => a.id);
-    expect(ids.some((id) => /delete|remove|destroy/i.test(id))).toBe(false);
+    expect(ids).toHaveLength(35);
+    expect(new Set(ids).size).toBe(35);
+  });
+
+  it('never exposes an action that deletes an object', () => {
+    /*
+     * The distinction matters. Several actions are named "remove_*", but they
+     * remove an ASSOCIATION — a task from a project, a tag from a task, a user
+     * from a project — and the underlying object continues to exist. Nothing
+     * here deletes a task, project, tag or user.
+     */
+    const ids = connector.listActions().map((a) => a.id);
+    expect(ids.some((id) => /delete|destroy|purge|trash/i.test(id))).toBe(false);
+
+    for (const action of connector.listActions()) {
+      expect(action.endpoints.some((e) => e.startsWith('DELETE '))).toBe(false);
+    }
   });
 
   it('requests no delete scope', () => {
@@ -63,15 +81,16 @@ describe('action registry', () => {
     expect(scopes.some((s) => s.includes('delete'))).toBe(false);
   });
 
-  it('marks exactly the three write actions as writes requiring approval', () => {
+  it('requires approval for every write action, without exception', () => {
     const writes = connector.listActions().filter((a) => a.safety.write);
 
-    expect(writes.map((a) => a.id)).toEqual([
-      'asana.create_task',
-      'asana.update_task',
-      'asana.add_comment',
-    ]);
+    expect(writes.length).toBeGreaterThan(3);
     expect(writes.every((a) => a.safety.requiresApproval)).toBe(true);
+
+    // The three original writes are still classified as writes.
+    for (const id of ['asana.create_task', 'asana.update_task', 'asana.add_comment']) {
+      expect(writes.map((a) => a.id)).toContain(id);
+    }
   });
 
   it('marks create and comment as non-idempotent, and update as idempotent', () => {

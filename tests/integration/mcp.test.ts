@@ -48,7 +48,10 @@ describe('MCP adapter — thinness guarantees', () => {
     expect(tools.map((t) => t.name).sort()).toEqual(
       connector.listActions().map((a) => a.id.replace(/\./g, '_')).sort(),
     );
-    expect(tools).toHaveLength(REQUIRED_ACTION_IDS.length);
+    // The count is derived, not hardcoded: adding an action must not require
+    // touching this test, but dropping one from MCP must fail it.
+    expect(tools).toHaveLength(connector.listActions().length);
+    expect(tools.length).toBeGreaterThanOrEqual(REQUIRED_ACTION_IDS.length);
   });
 
   it('maps every required action id to a tool', async () => {

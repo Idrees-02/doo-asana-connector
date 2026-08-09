@@ -16,7 +16,11 @@ authentication:
   default: pat
   scopes:
     - projects:read
+    - projects:write
+    - stories:read
     - stories:write
+    - tags:read
+    - tags:write
     - tasks:read
     - tasks:write
     - users:read
@@ -150,10 +154,633 @@ actions:
       idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
         the original result instead of posting again. Process-local, 15-minute TTL. The console
         additionally warns before re-posting identical text within 60 seconds."
+  - id: asana.get_task
+    name: Get Task
+    description: Fetch a single Asana task by id, with assignee, due date, projects and tags.
+    category: tasks
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:read
+    endpoints:
+      - GET /tasks/{task_gid}
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.list_tasks
+    name: List Tasks
+    description: List tasks filtered by project, section, tag, or assignee within a workspace. At least
+      one filter is required by Asana.
+    category: tasks
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: true
+    scopes:
+      - tasks:read
+    endpoints:
+      - GET /tasks
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.search_tasks
+    name: Search Tasks
+    description: Full-text search for tasks in a workspace. Requires an Asana premium plan — free
+      accounts receive ASANA_PAYMENT_REQUIRED.
+    category: tasks
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:read
+    endpoints:
+      - GET /workspaces/{workspace_gid}/tasks/search
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.complete_task
+    name: Complete Task
+    description: Mark an Asana task as complete.
+    category: tasks
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - PUT /tasks/{task_gid}
+    safety:
+      duplicateBehavior: "Applying the same change twice is harmless: the task is complete either way ends
+        in the same state, and no new object is created."
+      retryBehavior: Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up
+        to 2 further attempts, honouring Retry-After.
+      idempotencyBehavior: Naturally idempotent, so an idempotency key is optional. The end state depends
+        only on the values supplied, not on how many times the request was sent.
+  - id: asana.reopen_task
+    name: Reopen Task
+    description: Mark a completed Asana task as incomplete.
+    category: tasks
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - PUT /tasks/{task_gid}
+    safety:
+      duplicateBehavior: "Applying the same change twice is harmless: the task is incomplete either way
+        ends in the same state, and no new object is created."
+      retryBehavior: Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up
+        to 2 further attempts, honouring Retry-After.
+      idempotencyBehavior: Naturally idempotent, so an idempotency key is optional. The end state depends
+        only on the values supplied, not on how many times the request was sent.
+  - id: asana.assign_task
+    name: Assign Task
+    description: Assign an Asana task to a user, or unassign it with null.
+    category: tasks
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - PUT /tasks/{task_gid}
+    safety:
+      duplicateBehavior: "Applying the same change twice is harmless: the task ends with the same assignee
+        ends in the same state, and no new object is created."
+      retryBehavior: Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up
+        to 2 further attempts, honouring Retry-After.
+      idempotencyBehavior: Naturally idempotent, so an idempotency key is optional. The end state depends
+        only on the values supplied, not on how many times the request was sent.
+  - id: asana.set_task_due_date
+    name: Set Task Due Date
+    description: Set or clear the due date of an Asana task.
+    category: tasks
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - PUT /tasks/{task_gid}
+    safety:
+      duplicateBehavior: "Applying the same change twice is harmless: the task ends with the same due date
+        ends in the same state, and no new object is created."
+      retryBehavior: Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up
+        to 2 further attempts, honouring Retry-After.
+      idempotencyBehavior: Naturally idempotent, so an idempotency key is optional. The end state depends
+        only on the values supplied, not on how many times the request was sent.
+  - id: asana.set_task_description
+    name: Set Task Description
+    description: Replace the plain-text description (notes) of an Asana task.
+    category: tasks
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - PUT /tasks/{task_gid}
+    safety:
+      duplicateBehavior: "Applying the same change twice is harmless: the task ends with the same
+        description ends in the same state, and no new object is created."
+      retryBehavior: Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up
+        to 2 further attempts, honouring Retry-After.
+      idempotencyBehavior: Naturally idempotent, so an idempotency key is optional. The end state depends
+        only on the values supplied, not on how many times the request was sent.
+  - id: asana.create_subtask
+    name: Create Subtask
+    description: Create a subtask beneath an existing Asana task.
+    category: tasks
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: false
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - POST /tasks/{task_gid}/subtasks
+    safety:
+      duplicateBehavior: "Asana has no server-side deduplication: calling this twice creates two separate
+        subtasks with different gids."
+      retryBehavior: NEVER retried automatically. A failed create may already have succeeded (particularly
+        on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
+        the decision to the caller.
+      idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
+        the original result instead of creating a second object. Process-local, 15-minute TTL — it
+        does not survive a restart."
+  - id: asana.list_subtasks
+    name: List Subtasks
+    description: List the subtasks of an Asana task.
+    category: tasks
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: true
+    scopes:
+      - tasks:read
+    endpoints:
+      - GET /tasks/{task_gid}/subtasks
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.add_task_to_project
+    name: Add Task to Project
+    description: Add an existing Asana task to a project, optionally into a specific section.
+    category: tasks
+    type: write
+    risk: low
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - POST /tasks/{task_gid}/addProject
+    safety:
+      duplicateBehavior: "No duplicate is possible: a task is either in the project or it is not.
+        Repeating the call is a no-op."
+      retryBehavior: Safe to retry despite being a POST, because the operation only asserts an association
+        rather than creating an object. The client retries 429 and 5xx up to 2 further attempts.
+      idempotencyBehavior: Naturally idempotent. An idempotency key is unnecessary — the association
+        either exists or it does not.
+  - id: asana.remove_task_from_project
+    name: Remove Task from Project
+    description: Remove a task from a project. The task itself is not deleted — it remains in Asana and
+      in any other projects.
+    category: tasks
+    type: write
+    risk: low
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - POST /tasks/{task_gid}/removeProject
+    safety:
+      duplicateBehavior: "No duplicate is possible: a task is either in the project or it is not.
+        Repeating the call is a no-op."
+      retryBehavior: Safe to retry despite being a POST, because the operation only asserts an association
+        rather than creating an object. The client retries 429 and 5xx up to 2 further attempts.
+      idempotencyBehavior: Naturally idempotent. An idempotency key is unnecessary — the association
+        either exists or it does not.
+  - id: asana.get_project
+    name: Get Project
+    description: Fetch a single Asana project by id.
+    category: projects
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - projects:read
+    endpoints:
+      - GET /projects/{project_gid}
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.create_project
+    name: Create Project
+    description: Create a new Asana project in a workspace. A team gid is required when the workspace is
+      an organization.
+    category: projects
+    type: write
+    risk: high
+    requiresApproval: true
+    idempotent: false
+    supportsPagination: false
+    scopes:
+      - projects:write
+    endpoints:
+      - POST /projects
+    safety:
+      duplicateBehavior: "Asana has no server-side deduplication: calling this twice creates two separate
+        projects with different gids."
+      retryBehavior: NEVER retried automatically. A failed create may already have succeeded (particularly
+        on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
+        the decision to the caller.
+      idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
+        the original result instead of creating a second object. Process-local, 15-minute TTL — it
+        does not survive a restart."
+  - id: asana.update_project
+    name: Update Project
+    description: Update selected fields on an Asana project. Omitted fields are left untouched; an
+      explicit null clears a field.
+    category: projects
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - projects:write
+    endpoints:
+      - PUT /projects/{project_gid}
+    safety:
+      duplicateBehavior: "Applying the same change twice is harmless: the project ends with the same field
+        values ends in the same state, and no new object is created."
+      retryBehavior: Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up
+        to 2 further attempts, honouring Retry-After.
+      idempotencyBehavior: Naturally idempotent, so an idempotency key is optional. The end state depends
+        only on the values supplied, not on how many times the request was sent.
+  - id: asana.list_project_members
+    name: List Project Members
+    description: List the users who are members of an Asana project, with their access level.
+    category: projects
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: true
+    scopes:
+      - projects:read
+    endpoints:
+      - GET /projects/{project_gid}/project_memberships
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.add_project_member
+    name: Add Project Member
+    description: Add a user as a member of an Asana project.
+    category: projects
+    type: write
+    risk: low
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - projects:write
+    endpoints:
+      - POST /projects/{project_gid}/addMembers
+    safety:
+      duplicateBehavior: "No duplicate is possible: a user is either a member of the project or not.
+        Repeating the call is a no-op."
+      retryBehavior: Safe to retry despite being a POST, because the operation only asserts an association
+        rather than creating an object. The client retries 429 and 5xx up to 2 further attempts.
+      idempotencyBehavior: Naturally idempotent. An idempotency key is unnecessary — the association
+        either exists or it does not.
+  - id: asana.remove_project_member
+    name: Remove Project Member
+    description: Remove a user from an Asana project. The user account is not deleted — only their
+      membership of this project ends.
+    category: projects
+    type: write
+    risk: low
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - projects:write
+    endpoints:
+      - POST /projects/{project_gid}/removeMembers
+    safety:
+      duplicateBehavior: "No duplicate is possible: a user is either a member of the project or not.
+        Repeating the call is a no-op."
+      retryBehavior: Safe to retry despite being a POST, because the operation only asserts an association
+        rather than creating an object. The client retries 429 and 5xx up to 2 further attempts.
+      idempotencyBehavior: Naturally idempotent. An idempotency key is unnecessary — the association
+        either exists or it does not.
+  - id: asana.list_project_sections
+    name: List Project Sections
+    description: List the sections (columns) of an Asana project.
+    category: sections
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: true
+    scopes:
+      - projects:read
+    endpoints:
+      - GET /projects/{project_gid}/sections
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.create_section
+    name: Create Section
+    description: Create a new section (column) in an Asana project.
+    category: sections
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: false
+    supportsPagination: false
+    scopes:
+      - projects:write
+    endpoints:
+      - POST /projects/{project_gid}/sections
+    safety:
+      duplicateBehavior: "Asana has no server-side deduplication: calling this twice creates two separate
+        sections with different gids."
+      retryBehavior: NEVER retried automatically. A failed create may already have succeeded (particularly
+        on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
+        the decision to the caller.
+      idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
+        the original result instead of creating a second object. Process-local, 15-minute TTL — it
+        does not survive a restart."
+  - id: asana.update_section
+    name: Update Section
+    description: Rename an Asana section.
+    category: sections
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - projects:write
+    endpoints:
+      - PUT /sections/{section_gid}
+    safety:
+      duplicateBehavior: "Applying the same change twice is harmless: the section ends with the same name
+        ends in the same state, and no new object is created."
+      retryBehavior: Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up
+        to 2 further attempts, honouring Retry-After.
+      idempotencyBehavior: Naturally idempotent, so an idempotency key is optional. The end state depends
+        only on the values supplied, not on how many times the request was sent.
+  - id: asana.move_task_to_section
+    name: Move Task to Section
+    description: Move a task into a section. Asana removes the task from any other section of the same
+      project automatically.
+    category: sections
+    type: write
+    risk: low
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - POST /sections/{section_gid}/addTask
+    safety:
+      duplicateBehavior: "No duplicate is possible: a task sits in exactly one section of a project.
+        Repeating the call is a no-op."
+      retryBehavior: Safe to retry despite being a POST, because the operation only asserts an association
+        rather than creating an object. The client retries 429 and 5xx up to 2 further attempts.
+      idempotencyBehavior: Naturally idempotent. An idempotency key is unnecessary — the association
+        either exists or it does not.
+  - id: asana.get_current_user
+    name: Get Current User
+    description: Fetch the authenticated Asana user and the workspaces they can see. Read-only, with no
+      side effects.
+    category: users
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - users:read
+    endpoints:
+      - GET /users/me
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.get_user
+    name: Get User
+    description: Fetch a single Asana user by gid, email, or "me".
+    category: users
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - users:read
+    endpoints:
+      - GET /users/{user_gid}
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.list_users
+    name: List Users
+    description: List Asana users, optionally filtered to a workspace or team.
+    category: users
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: true
+    scopes:
+      - users:read
+    endpoints:
+      - GET /users
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.list_comments
+    name: List Comments
+    description: List the comments on an Asana task. System-generated activity entries are excluded by default.
+    category: comments
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: true
+    scopes:
+      - stories:read
+    endpoints:
+      - GET /tasks/{task_gid}/stories
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.list_tags
+    name: List Tags
+    description: List Asana tags, optionally filtered to a workspace.
+    category: tags
+    type: read
+    risk: low
+    requiresApproval: false
+    idempotent: true
+    supportsPagination: true
+    scopes:
+      - tags:read
+    endpoints:
+      - GET /tags
+    safety:
+      duplicateBehavior: None. Reads have no side effects, so repeating this action changes nothing.
+      retryBehavior: Safe to retry automatically. The client retries 429 and 5xx up to 3 attempts with
+        backoff, honouring Retry-After.
+      idempotencyBehavior: Not applicable — this action never modifies data.
+  - id: asana.create_tag
+    name: Create Tag
+    description: Create a new Asana tag in a workspace.
+    category: tags
+    type: write
+    risk: medium
+    requiresApproval: true
+    idempotent: false
+    supportsPagination: false
+    scopes:
+      - tags:write
+    endpoints:
+      - POST /tags
+    safety:
+      duplicateBehavior: "Asana has no server-side deduplication: calling this twice creates two separate
+        tags with different gids."
+      retryBehavior: NEVER retried automatically. A failed create may already have succeeded (particularly
+        on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
+        the decision to the caller.
+      idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
+        the original result instead of creating a second object. Process-local, 15-minute TTL — it
+        does not survive a restart."
+  - id: asana.add_tag_to_task
+    name: Add Tag to Task
+    description: Attach an existing tag to an Asana task.
+    category: tags
+    type: write
+    risk: low
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - POST /tasks/{task_gid}/addTag
+    safety:
+      duplicateBehavior: "No duplicate is possible: a tag is either on the task or it is not. Repeating
+        the call is a no-op."
+      retryBehavior: Safe to retry despite being a POST, because the operation only asserts an association
+        rather than creating an object. The client retries 429 and 5xx up to 2 further attempts.
+      idempotencyBehavior: Naturally idempotent. An idempotency key is unnecessary — the association
+        either exists or it does not.
+  - id: asana.remove_tag_from_task
+    name: Remove Tag from Task
+    description: Detach a tag from an Asana task. The tag itself is not deleted and remains available in
+      the workspace.
+    category: tags
+    type: write
+    risk: low
+    requiresApproval: true
+    idempotent: true
+    supportsPagination: false
+    scopes:
+      - tasks:write
+    endpoints:
+      - POST /tasks/{task_gid}/removeTag
+    safety:
+      duplicateBehavior: "No duplicate is possible: a tag is either on the task or it is not. Repeating
+        the call is a no-op."
+      retryBehavior: Safe to retry despite being a POST, because the operation only asserts an association
+        rather than creating an object. The client retries 429 and 5xx up to 2 further attempts.
+      idempotencyBehavior: Naturally idempotent. An idempotency key is unnecessary — the association
+        either exists or it does not.
 writeActions:
   - asana.create_task
   - asana.update_task
   - asana.add_comment
+  - asana.complete_task
+  - asana.reopen_task
+  - asana.assign_task
+  - asana.set_task_due_date
+  - asana.set_task_description
+  - asana.create_subtask
+  - asana.add_task_to_project
+  - asana.remove_task_from_project
+  - asana.create_project
+  - asana.update_project
+  - asana.add_project_member
+  - asana.remove_project_member
+  - asana.create_section
+  - asana.update_section
+  - asana.move_task_to_section
+  - asana.create_tag
+  - asana.add_tag_to_task
+  - asana.remove_tag_from_task
 readActions:
   - asana.list_projects
   - asana.list_project_tasks
+  - asana.get_task
+  - asana.list_tasks
+  - asana.search_tasks
+  - asana.list_subtasks
+  - asana.get_project
+  - asana.list_project_members
+  - asana.list_project_sections
+  - asana.get_current_user
+  - asana.get_user
+  - asana.list_users
+  - asana.list_comments
+  - asana.list_tags

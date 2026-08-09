@@ -12,17 +12,28 @@ describe('connector manifest', () => {
     expect(manifest.category).toBe('Project Management');
   });
 
-  it('declares exactly the five required actions', () => {
-    expect(manifest.actions.map((a) => a.id)).toEqual([...REQUIRED_ACTION_IDS]);
+  it('declares the five required actions first and in order', () => {
+    // The registry is additive: extra actions may follow, but the required
+    // five must be present, correctly named, and never reordered.
+    expect(manifest.actions.slice(0, 5).map((a) => a.id)).toEqual([...REQUIRED_ACTION_IDS]);
+  });
+
+  it('declares all 35 actions', () => {
+    expect(manifest.actions).toHaveLength(35);
   });
 
   it('separates read and write actions correctly', () => {
-    expect(manifest.readActions).toEqual(['asana.list_projects', 'asana.list_project_tasks']);
-    expect(manifest.writeActions).toEqual([
-      'asana.create_task',
-      'asana.update_task',
-      'asana.add_comment',
-    ]);
+    // Every action is classified as exactly one of the two.
+    expect(manifest.readActions.length + manifest.writeActions.length).toBe(
+      manifest.actions.length,
+    );
+
+    for (const id of ['asana.list_projects', 'asana.list_project_tasks', 'asana.get_task']) {
+      expect(manifest.readActions).toContain(id);
+    }
+    for (const id of ['asana.create_task', 'asana.update_task', 'asana.add_comment']) {
+      expect(manifest.writeActions).toContain(id);
+    }
   });
 
   it('publishes safety metadata for every action', () => {
@@ -36,10 +47,17 @@ describe('connector manifest', () => {
   it('states that non-idempotent writes are never retried automatically', () => {
     const nonIdempotentWrites = manifest.actions.filter((a) => a.type === 'write' && !a.idempotent);
 
-    expect(nonIdempotentWrites.map((a) => a.id)).toEqual([
-      'asana.create_task',
+    // Exactly the actions that create a NEW object. Everything else either
+    // sets a value or asserts an association, both of which are repeatable.
+    expect(nonIdempotentWrites.map((a) => a.id).sort()).toEqual([
       'asana.add_comment',
+      'asana.create_project',
+      'asana.create_section',
+      'asana.create_subtask',
+      'asana.create_tag',
+      'asana.create_task',
     ]);
+
     for (const action of nonIdempotentWrites) {
       expect(action.safety.retryBehavior).toMatch(/never retried automatically/i);
     }
@@ -53,7 +71,11 @@ describe('manifest scopes — least privilege', () => {
     // the connection test.
     expect([...manifest.authentication.scopes]).toEqual([
       'projects:read',
+      'projects:write',
+      'stories:read',
       'stories:write',
+      'tags:read',
+      'tags:write',
       'tasks:read',
       'tasks:write',
       'users:read',

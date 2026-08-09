@@ -88,7 +88,7 @@ interface StoredTask {
   num_subtasks: number;
   assignee: { gid: string; name: string; email: string; resource_type: 'user' } | null;
   workspace: { gid: string; name: string; resource_type: 'workspace' };
-  parent: null;
+  parent: { gid: string; name: string; resource_type: 'task' } | null;
   projects: Array<{ gid: string; name: string; resource_type: 'project' }>;
   tags: Array<{ gid: string; name: string; resource_type: 'tag' }>;
 }
@@ -109,6 +109,11 @@ export class DemoStore {
   readonly seed: DemoSeed;
   private tasks: StoredTask[];
   private stories: StoredStory[];
+  private sections: Array<DemoSeed['sections'][number]>;
+  private tags: Array<DemoSeed['tags'][number]>;
+  private memberships: Array<DemoSeed['memberships'][number]>;
+  /** taskGid -> sectionGid, mirroring Asana's one-section-per-project rule. */
+  private taskSections = new Map<string, string>();
   private nextId: number;
 
   readonly controls: DemoControls = {
@@ -120,6 +125,9 @@ export class DemoStore {
     this.seed = seed;
     this.tasks = seed.tasks.map((t) => ({ ...t }));
     this.stories = seed.stories.map((s) => ({ ...s }));
+    this.sections = seed.sections.map((s) => ({ ...s }));
+    this.tags = seed.tags.map((t) => ({ ...t }));
+    this.memberships = seed.memberships.map((m) => ({ ...m }));
     this.nextId = seed.nextId;
   }
 
@@ -127,8 +135,180 @@ export class DemoStore {
   reset(): void {
     this.tasks = this.seed.tasks.map((t) => ({ ...t }));
     this.stories = this.seed.stories.map((s) => ({ ...s }));
+    this.sections = this.seed.sections.map((s) => ({ ...s }));
+    this.tags = this.seed.tags.map((t) => ({ ...t }));
+    this.memberships = this.seed.memberships.map((m) => ({ ...m }));
+    this.taskSections.clear();
     this.nextId = this.seed.nextId;
     this.controls.fault = 'none';
+  }
+
+  /* ---------------- Extended-action state ---------------- */
+
+  listSections(projectGid: string) {
+    return this.sections.filter((s) => s.project.gid === projectGid);
+  }
+
+  getSection(gid: string) {
+    return this.sections.find((s) => s.gid === gid);
+  }
+
+  createSection(projectGid: string, name: string) {
+    const proj = this.seed.projects.find((p) => p.gid === projectGid);
+    if (proj === undefined) return undefined;
+    const created = {
+      gid: this.allocateId(),
+      name,
+      created_at: new Date().toISOString(),
+      resource_type: 'section' as const,
+      project: { gid: proj.gid, name: proj.name, resource_type: 'project' as const },
+    };
+    this.sections = [...this.sections, created];
+    return created;
+  }
+
+  updateSection(gid: string, name: string) {
+    const section = this.getSection(gid);
+    if (section === undefined) return undefined;
+    section.name = name;
+    return section;
+  }
+
+  /** Mirrors Asana: adding a task to a section removes it from any other. */
+  moveTaskToSection(sectionGid: string, taskGid: string): boolean {
+    if (this.getSection(sectionGid) === undefined) return false;
+    if (this.getTask(taskGid) === undefined) return false;
+    this.taskSections.set(taskGid, sectionGid);
+    return true;
+  }
+
+  tasksInSection(sectionGid: string): StoredTask[] {
+    return this.tasks.filter((t) => this.taskSections.get(t.gid) === sectionGid);
+  }
+
+  listTags(workspaceGid: string | null) {
+    return this.tags.filter((t) => workspaceGid === null || t.workspace.gid === workspaceGid);
+  }
+
+  getTag(gid: string) {
+    return this.tags.find((t) => t.gid === gid);
+  }
+
+  createTag(name: string, workspaceGid: string, color: string | null, notes: string) {
+    const gid = this.allocateId();
+    const created = {
+      gid,
+      name,
+      color,
+      notes,
+      created_at: new Date().toISOString(),
+      permalink_url: `https://app.asana.com/0/${gid}`,
+      resource_type: 'tag' as const,
+      workspace: {
+        gid: workspaceGid,
+        name: this.seed.workspace.name,
+        resource_type: 'workspace' as const,
+      },
+    };
+    this.tags = [...this.tags, created];
+    return created;
+  }
+
+  setTaskTag(taskGid: string, tagGid: string, attach: boolean): boolean {
+    const task = this.getTask(taskGid);
+    const tag = this.getTag(tagGid);
+    if (task === undefined || tag === undefined) return false;
+
+    const present = task.tags.some((t) => t.gid === tagGid);
+    if (attach && !present) {
+      task.tags = [...task.tags, { gid: tag.gid, name: tag.name, resource_type: 'tag' }];
+    } else if (!attach && present) {
+      task.tags = task.tags.filter((t) => t.gid !== tagGid);
+    }
+    task.modified_at = new Date().toISOString();
+    return true;
+  }
+
+  listMemberships(projectGid: string) {
+    return this.memberships.filter((m) => m.projectGid === projectGid);
+  }
+
+  setProjectMember(projectGid: string, member: string, add: boolean): boolean {
+    if (!this.seed.projects.some((p) => p.gid === projectGid)) return false;
+
+    const key = member === 'me' ? this.seed.user.gid : member;
+    const user = this.seed.users.find((u) => u.gid === key || u.email === key);
+    if (user === undefined) return false;
+
+    const existing = this.memberships.find(
+      (m) => m.projectGid === projectGid && m.user.gid === user.gid,
+    );
+
+    if (add && existing === undefined) {
+      this.memberships = [
+        ...this.memberships,
+        {
+          gid: this.allocateId(),
+          projectGid,
+          resource_type: 'project_membership',
+          user: { gid: user.gid, name: user.name, email: user.email, resource_type: 'user' },
+          access_level: 'editor',
+        },
+      ];
+    } else if (!add && existing !== undefined) {
+      this.memberships = this.memberships.filter((m) => m !== existing);
+    }
+    return true;
+  }
+
+  listSubtasks(parentGid: string): StoredTask[] {
+    return this.tasks.filter((t) => t.parent !== null && t.parent.gid === parentGid);
+  }
+
+  createSubtask(parentGid: string, fields: Record<string, unknown>): StoredTask | undefined {
+    const parent = this.getTask(parentGid);
+    if (parent === undefined) return undefined;
+
+    const created = this.createTask({ ...fields, projects: [] });
+    created.parent = { gid: parent.gid, name: parent.name, resource_type: 'task' };
+    created.projects = [...parent.projects];
+    parent.num_subtasks += 1;
+    return created;
+  }
+
+  setTaskProject(taskGid: string, projectGid: string, add: boolean): boolean {
+    const task = this.getTask(taskGid);
+    const proj = this.seed.projects.find((p) => p.gid === projectGid);
+    if (task === undefined || proj === undefined) return false;
+
+    const present = task.projects.some((p) => p.gid === projectGid);
+    if (add && !present) {
+      task.projects = [
+        ...task.projects,
+        { gid: proj.gid, name: proj.name, resource_type: 'project' },
+      ];
+    } else if (!add && present) {
+      task.projects = task.projects.filter((p) => p.gid !== projectGid);
+    }
+    task.modified_at = new Date().toISOString();
+    return true;
+  }
+
+  searchTasks(text: string | null, completed: boolean | null): StoredTask[] {
+    return this.tasks.filter((t) => {
+      if (completed !== null && t.completed !== completed) return false;
+      if (text === null) return true;
+      const needle = text.toLowerCase();
+      return t.name.toLowerCase().includes(needle) || t.notes.toLowerCase().includes(needle);
+    });
+  }
+
+  allTasks(): StoredTask[] {
+    return this.tasks;
+  }
+
+  listUsers(): Array<{ gid: string; name: string; email: string; resource_type: 'user' }> {
+    return this.seed.users.map((u) => ({ ...u, resource_type: 'user' as const }));
   }
 
   allocateId(): string {
@@ -390,6 +570,212 @@ function route(
 
     if (method === 'GET') {
       return paginated(store.listStories(gid), 100, null);
+    }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Extended actions                                                  */
+  /* ---------------------------------------------------------------- */
+
+  // GET /users, GET /users/{gid}
+  if (method === 'GET' && path === '/users') {
+    return paginated(store.listUsers(), limit, offset);
+  }
+  const userPath = /^\/users\/([^/]+)$/.exec(path);
+  if (method === 'GET' && userPath?.[1] !== undefined) {
+    const key = decodeURIComponent(userPath[1]);
+    const user = store.listUsers().find((u) => u.gid === key || u.email === key);
+    return user === undefined ? asanaError(404, 'Not a recognized ID') : json({ data: user });
+  }
+
+  // GET /workspaces/{gid}/tasks/search
+  const search = /^\/workspaces\/(\d+)\/tasks\/search$/.exec(path);
+  if (method === 'GET' && search !== null) {
+    const completedParam = url.searchParams.get('completed');
+    const results = store.searchTasks(
+      url.searchParams.get('text'),
+      completedParam === null ? null : completedParam === 'true',
+    );
+    // Search has no next_page in Asana; mirror that exactly.
+    return json({ data: results.slice(0, Math.min(limit, 100)) });
+  }
+
+  // GET /tasks  (requires a filter, as Asana does)
+  if (method === 'GET' && path === '/tasks') {
+    const project = url.searchParams.get('project');
+    const sectionParam = url.searchParams.get('section');
+    const tagParam = url.searchParams.get('tag');
+    const assignee = url.searchParams.get('assignee');
+
+    if (project === null && sectionParam === null && tagParam === null && assignee === null) {
+      return asanaError(400, 'project: Missing input');
+    }
+
+    let results = store.allTasks();
+    if (project !== null) results = store.listTasks(project, url.searchParams.get('completed_since'));
+    else if (sectionParam !== null) results = store.tasksInSection(sectionParam);
+    else if (tagParam !== null) results = results.filter((t) => t.tags.some((x) => x.gid === tagParam));
+    else if (assignee !== null) {
+      const key = assignee === 'me' ? store.seed.user.gid : assignee;
+      results = results.filter((t) => t.assignee?.gid === key || t.assignee?.email === key);
+    }
+    return paginated(results, limit, offset);
+  }
+
+  // Subtasks
+  const subtasks = /^\/tasks\/(\d+)\/subtasks$/.exec(path);
+  if (subtasks?.[1] !== undefined) {
+    const parentGid = subtasks[1];
+    if (store.getTask(parentGid) === undefined) return asanaError(404, 'Not a recognized ID');
+
+    if (method === 'GET') return paginated(store.listSubtasks(parentGid), limit, offset);
+    if (method === 'POST') {
+      if (typeof body['name'] !== 'string' || body['name'].trim().length === 0) {
+        return asanaError(400, 'name: Missing input');
+      }
+      const created = store.createSubtask(parentGid, body);
+      return created === undefined
+        ? asanaError(404, 'Not a recognized ID')
+        : json({ data: created }, 201);
+    }
+  }
+
+  // Task <-> project / tag association
+  const assoc = /^\/tasks\/(\d+)\/(addProject|removeProject|addTag|removeTag)$/.exec(path);
+  if (method === 'POST' && assoc?.[1] !== undefined && assoc[2] !== undefined) {
+    const [, taskGid, op] = assoc;
+    let ok: boolean;
+
+    if (op === 'addProject' || op === 'removeProject') {
+      const project = asString(body['project']);
+      if (project === null) return asanaError(400, 'project: Missing input');
+      ok = store.setTaskProject(taskGid, project, op === 'addProject');
+    } else {
+      const tagGid = asString(body['tag']);
+      if (tagGid === null) return asanaError(400, 'tag: Missing input');
+      ok = store.setTaskTag(taskGid, tagGid, op === 'addTag');
+    }
+
+    return ok ? json({ data: {} }) : asanaError(404, 'Not a recognized ID');
+  }
+
+  // Project by id
+  const projectPath = /^\/projects\/(\d+)$/.exec(path);
+  if (projectPath?.[1] !== undefined) {
+    const gid = projectPath[1];
+    const proj = store.seed.projects.find((p) => p.gid === gid);
+    if (proj === undefined) return asanaError(404, 'Not a recognized ID');
+
+    if (method === 'GET') return json({ data: proj });
+    if (method === 'PUT') {
+      // Demo projects are seeded immutably; echo the merged view back so the
+      // action's response shape is still exercised end to end.
+      const merged = {
+        ...proj,
+        ...(typeof body['name'] === 'string' ? { name: body['name'] } : {}),
+        ...(typeof body['archived'] === 'boolean' ? { archived: body['archived'] } : {}),
+        modified_at: new Date().toISOString(),
+      };
+      return json({ data: merged });
+    }
+  }
+
+  // POST /projects
+  if (method === 'POST' && path === '/projects') {
+    const name = asString(body['name']);
+    const workspace = asString(body['workspace']);
+    if (name === null) return asanaError(400, 'name: Missing input');
+    if (workspace === null) return asanaError(400, 'workspace: Missing input');
+
+    const gid = store.allocateId();
+    return json(
+      {
+        data: {
+          gid,
+          name,
+          archived: false,
+          color: asString(body['color']),
+          notes: asString(body['notes']) ?? '',
+          permalink_url: `https://app.asana.com/0/${gid}`,
+          created_at: new Date().toISOString(),
+          modified_at: new Date().toISOString(),
+          due_on: asString(body['due_on']),
+          resource_type: 'project',
+          workspace: { ...store.seed.workspace, resource_type: 'workspace' },
+          owner: null,
+          team: null,
+        },
+      },
+      201,
+    );
+  }
+
+  // Project memberships
+  const memberships = /^\/projects\/(\d+)\/project_memberships$/.exec(path);
+  if (method === 'GET' && memberships?.[1] !== undefined) {
+    return paginated(store.listMemberships(memberships[1]), limit, offset);
+  }
+
+  const memberChange = /^\/projects\/(\d+)\/(addMembers|removeMembers)$/.exec(path);
+  if (method === 'POST' && memberChange?.[1] !== undefined && memberChange[2] !== undefined) {
+    const [, projectGid, op] = memberChange;
+    const member = asString(body['members']);
+    if (member === null) return asanaError(400, 'members: Missing input');
+
+    const ok = store.setProjectMember(projectGid, member, op === 'addMembers');
+    if (!ok) return asanaError(404, 'Not a recognized ID');
+
+    const proj = store.seed.projects.find((p) => p.gid === projectGid)!;
+    return json({ data: proj });
+  }
+
+  // Sections
+  const sections = /^\/projects\/(\d+)\/sections$/.exec(path);
+  if (sections?.[1] !== undefined) {
+    const projectGid = sections[1];
+    if (!store.seed.projects.some((p) => p.gid === projectGid)) {
+      return asanaError(404, 'Not a recognized ID');
+    }
+
+    if (method === 'GET') return paginated(store.listSections(projectGid), limit, offset);
+    if (method === 'POST') {
+      const name = asString(body['name']);
+      if (name === null || name.trim().length === 0) return asanaError(400, 'name: Missing input');
+      const created = store.createSection(projectGid, name);
+      return created === undefined
+        ? asanaError(404, 'Not a recognized ID')
+        : json({ data: created }, 201);
+    }
+  }
+
+  const sectionPath = /^\/sections\/(\d+)$/.exec(path);
+  if (method === 'PUT' && sectionPath?.[1] !== undefined) {
+    const name = asString(body['name']);
+    if (name === null || name.trim().length === 0) return asanaError(400, 'name: Missing input');
+    const updated = store.updateSection(sectionPath[1], name);
+    return updated === undefined ? asanaError(404, 'Not a recognized ID') : json({ data: updated });
+  }
+
+  const sectionAddTask = /^\/sections\/(\d+)\/addTask$/.exec(path);
+  if (method === 'POST' && sectionAddTask?.[1] !== undefined) {
+    const taskGid = asString(body['task']);
+    if (taskGid === null) return asanaError(400, 'task: Missing input');
+    const ok = store.moveTaskToSection(sectionAddTask[1], taskGid);
+    return ok ? json({ data: {} }) : asanaError(404, 'Not a recognized ID');
+  }
+
+  // Tags
+  if (path === '/tags') {
+    if (method === 'GET') return paginated(store.listTags(url.searchParams.get('workspace')), limit, offset);
+    if (method === 'POST') {
+      const name = asString(body['name']);
+      const workspace = asString(body['workspace']);
+      if (name === null) return asanaError(400, 'name: Missing input');
+      if (workspace === null) return asanaError(400, 'workspace: Missing input');
+      return json(
+        { data: store.createTag(name, workspace, asString(body['color']), asString(body['notes']) ?? '') },
+        201,
+      );
     }
   }
 

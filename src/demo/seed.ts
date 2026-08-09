@@ -40,6 +40,33 @@ export interface SeedProject {
   readonly team: { gid: string; name: string; resource_type: 'team' } | null;
 }
 
+export interface DemoSeedSection {
+  gid: string;
+  name: string;
+  created_at: string;
+  resource_type: 'section';
+  project: { gid: string; name: string; resource_type: 'project' };
+}
+
+export interface DemoSeedTag {
+  gid: string;
+  name: string;
+  color: string | null;
+  notes: string;
+  created_at: string;
+  permalink_url: string;
+  resource_type: 'tag';
+  workspace: { gid: string; name: string; resource_type: 'workspace' };
+}
+
+export interface DemoSeedMembership {
+  gid: string;
+  projectGid: string;
+  resource_type: 'project_membership';
+  user: { gid: string; name: string; email: string; resource_type: 'user' };
+  access_level: string;
+}
+
 export interface DemoSeed {
   readonly user: SeedUser;
   readonly users: readonly SeedUser[];
@@ -47,6 +74,9 @@ export interface DemoSeed {
   readonly projects: readonly SeedProject[];
   readonly tasks: readonly DemoSeedTask[];
   readonly stories: readonly DemoSeedStory[];
+  readonly sections: readonly DemoSeedSection[];
+  readonly tags: readonly DemoSeedTag[];
+  readonly memberships: readonly DemoSeedMembership[];
   readonly nextId: number;
 }
 
@@ -252,6 +282,53 @@ const STORIES: readonly DemoSeedStory[] = [
   },
 ];
 
+function section(gid: string, name: string, projectGid: string): DemoSeedSection {
+  const proj = PROJECTS.find((p) => p.gid === projectGid)!;
+  return {
+    gid,
+    name,
+    created_at: '2026-05-02T09:05:00.000Z',
+    resource_type: 'section',
+    project: { gid: proj.gid, name: proj.name, resource_type: 'project' },
+  };
+}
+
+/** Sections across the two most-used demo projects. */
+const SECTIONS: readonly DemoSeedSection[] = [
+  section('900000000005001', 'To Do', LAUNCH),
+  section('900000000005002', 'In Progress', LAUNCH),
+  section('900000000005003', 'Done', LAUNCH),
+  section('900000000005004', 'Backlog', ENGINEERING),
+  section('900000000005005', 'In Review', ENGINEERING),
+];
+
+function tag(gid: string, name: string, color: string): DemoSeedTag {
+  return {
+    gid,
+    name,
+    color,
+    notes: '',
+    created_at: '2026-05-03T10:00:00.000Z',
+    permalink_url: `https://app.asana.com/0/${gid}`,
+    resource_type: 'tag',
+    workspace: { gid: WORKSPACE.gid, name: WORKSPACE.name, resource_type: 'workspace' },
+  };
+}
+
+const TAGS: readonly DemoSeedTag[] = [
+  tag('900000000006001', 'launch-blocker', 'dark-red'),
+  tag('900000000006002', 'documentation', 'light-blue'),
+  tag('900000000006003', 'needs-review', 'light-orange'),
+];
+
+const MEMBERSHIPS: readonly DemoSeedMembership[] = USERS.map((u, index) => ({
+  gid: `90000000000700${index + 1}`,
+  projectGid: LAUNCH,
+  resource_type: 'project_membership' as const,
+  user: { gid: u.gid, name: u.name, email: u.email, resource_type: 'user' as const },
+  access_level: index === 0 ? 'admin' : 'editor',
+}));
+
 export const DEMO_SEED: DemoSeed = {
   user: ME,
   users: USERS,
@@ -259,5 +336,8 @@ export const DEMO_SEED: DemoSeed = {
   projects: PROJECTS,
   tasks: TASKS,
   stories: STORIES,
+  sections: SECTIONS,
+  tags: TAGS,
+  memberships: MEMBERSHIPS,
   nextId: 900_000_000_004_000,
 };

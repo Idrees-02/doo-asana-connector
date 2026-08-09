@@ -69,7 +69,7 @@ export interface ConnectorAction<TInput = unknown, TOutput = unknown> {
   readonly id: string;
   readonly name: string;
   readonly description: string;
-  readonly category: 'projects' | 'tasks' | 'comments';
+  readonly category: 'projects' | 'tasks' | 'comments' | 'sections' | 'users' | 'tags';
   readonly safety: SafetyMetadata;
   readonly supportsPagination: boolean;
   /** Minimum OAuth scopes this action needs. */
