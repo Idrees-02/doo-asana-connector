@@ -20,7 +20,7 @@ export function Documentation() {
   const active = useActiveSection(SECTIONS.map((s) => s.id));
 
   return (
-    <div className="mx-auto max-w-6xl lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-6">
+    <div className="lg:grid lg:grid-cols-[10.5rem_minmax(0,1fr)] lg:gap-5">
       <TableOfContents active={active} />
 
       <div className="min-w-0">
@@ -286,120 +286,7 @@ export function Documentation() {
             </Bullets>
           </Section>
 
-          <Section id="limitations" title="9. Known limitations">
-            <P>Documented, not hidden:</P>
-            <ul className="mt-2 space-y-2">
-              <Limitation tone="warning" title="search_tasks">
-                Asana availability is premium-only, and pagination behaviour is not treated as
-                universally stable.
-              </Limitation>
-              <Limitation tone="warning" title="list_tasks">
-                Asana requires a specific filter combination for certain requests. The connector
-                validates this rather than surfacing a cryptic upstream error.
-              </Limitation>
-              <Limitation tone="warning" title="Project memberships">
-                The relevant endpoint is technically deprecated, but it is retained because the
-                documented replacement does not clearly expose the required OAuth scope.
-              </Limitation>
-              <Limitation tone="info" title="OAuth interactive consent">
-                The developer does not perform the user&rsquo;s login and consent step. The
-                authorization endpoint itself was verified live.
-              </Limitation>
-              <Limitation tone="info" title="Public HTTPS MCP endpoint">
-                Not deployed by design; the project is local-first. The MCP adapter is implemented.
-              </Limitation>
-              <Limitation tone="info" title="Delete">
-                Intentionally unsupported. This is a safety and product decision, not an incomplete
-                CRUD implementation.
-              </Limitation>
-            </ul>
-          </Section>
-
-          <Section id="setup" title="10. Local setup and demo">
-            <ol className="list-decimal space-y-1.5 pl-5 text-(--color-ink-muted)">
-              <li>Clone the repository.</li>
-              <li>
-                Run <code className="mono">npm install</code>.
-              </li>
-              <li>Create the private environment file from the provided template.</li>
-              <li>Configure PAT and/or OAuth values as required.</li>
-              <li>
-                Run <code className="mono">npm run dev</code>.
-              </li>
-              <li>
-                Use the console to browse the {total}-action registry, inspect schemas and run
-                supported actions.
-              </li>
-              <li>
-                For live Asana verification, use a valid credential and clean up temporary test data
-                manually when required.
-              </li>
-            </ol>
-
-            <H>Demo narrative</H>
-            <P>
-              A strong demonstration path is: open the Action Center → show the {total} live actions
-              → inspect a schema → authenticate → read the current user and projects → create or
-              update a safe demo task with explicit approval → add a comment → show the resulting
-              Asana state → explain the write-safety policy and the shared MCP and API architecture.
-            </P>
-          </Section>
-
-          <Section id="decisions" title="11. Engineering decisions">
-            <H>Single-source connector core</H>
-            <P>
-              The most important architectural decision is keeping business and integration logic
-              inside one core. The Express API and MCP adapter are intentionally thin. This reduces
-              drift, simplifies testing, and ensures an AI agent and a human using the console
-              receive the same validation and safety behaviour.
-            </P>
-
-            <H>Real-client demo path</H>
-            <P>
-              Demo behaviour is designed around the same client, action, validation and error
-              pipeline rather than a completely separate feature implementation. This makes the
-              console a useful review surface for the shipping architecture.
-            </P>
-
-            <H>Least privilege</H>
-            <P>
-              OAuth scopes are limited to the operations actually required. Delete scopes are
-              intentionally absent, because the connector does not expose deletion.
-            </P>
-
-            <H>Honest compatibility</H>
-            <P>
-              The documentation distinguishes between live-verified behaviour and
-              implemented-but-not-live-verified behaviour. This matters for an integration project,
-              because an API contract can differ from an in-memory test implementation.
-            </P>
-          </Section>
-
-          <Section id="snapshot" title="12. Submission snapshot">
-            <Table
-              head={['Item', 'Status']}
-              rows={[
-                ['Connector version', 'v1.0.0'],
-                ['Actions', `${total} total`],
-                ['Required actions', '5 — preserved unchanged'],
-                ['Extended actions', '30'],
-                ['Authentication', 'PAT + OAuth 2.0 / PKCE'],
-                ['MCP', 'Implemented; stdio and Streamable HTTP; load tested to 200 sessions'],
-                ['Tests', '267'],
-                ['CI', 'Green — Node 20, 22 and 24'],
-                ['Delete operations', 'None'],
-                ['Primary author', 'Idrees Khaled'],
-                ['Organization', 'Doo'],
-                ['Prepared for', 'DOO Builders League'],
-              ]}
-            />
-            <P>
-              This document describes the implemented v1.0.0 connector architecture, action surface,
-              security model, testing status and known limitations.
-            </P>
-          </Section>
-
-          <Section id="load" title="13. Load and stress testing">
+          <Section id="load" title="9. Load and stress testing">
             <P>
               The deployed connector was exercised against the live Railway service and a real Asana
               account. The harness is{' '}
@@ -495,6 +382,119 @@ export function Documentation() {
               </Limitation>
             </ul>
           </Section>
+
+          <Section id="limitations" title="10. Known limitations">
+            <P>Documented, not hidden:</P>
+            <ul className="mt-2 space-y-2">
+              <Limitation tone="warning" title="search_tasks">
+                Asana availability is premium-only, and pagination behaviour is not treated as
+                universally stable.
+              </Limitation>
+              <Limitation tone="warning" title="list_tasks">
+                Asana requires a specific filter combination for certain requests. The connector
+                validates this rather than surfacing a cryptic upstream error.
+              </Limitation>
+              <Limitation tone="warning" title="Project memberships">
+                The relevant endpoint is technically deprecated, but it is retained because the
+                documented replacement does not clearly expose the required OAuth scope.
+              </Limitation>
+              <Limitation tone="info" title="OAuth interactive consent">
+                The developer does not perform the user&rsquo;s login and consent step. The
+                authorization endpoint itself was verified live.
+              </Limitation>
+              <Limitation tone="info" title="Public HTTPS MCP endpoint">
+                Not deployed by design; the project is local-first. The MCP adapter is implemented.
+              </Limitation>
+              <Limitation tone="info" title="Delete">
+                Intentionally unsupported. This is a safety and product decision, not an incomplete
+                CRUD implementation.
+              </Limitation>
+            </ul>
+          </Section>
+
+          <Section id="setup" title="11. Local setup and demo">
+            <ol className="list-decimal space-y-1.5 pl-5 text-(--color-ink-muted)">
+              <li>Clone the repository.</li>
+              <li>
+                Run <code className="mono">npm install</code>.
+              </li>
+              <li>Create the private environment file from the provided template.</li>
+              <li>Configure PAT and/or OAuth values as required.</li>
+              <li>
+                Run <code className="mono">npm run dev</code>.
+              </li>
+              <li>
+                Use the console to browse the {total}-action registry, inspect schemas and run
+                supported actions.
+              </li>
+              <li>
+                For live Asana verification, use a valid credential and clean up temporary test data
+                manually when required.
+              </li>
+            </ol>
+
+            <H>Demo narrative</H>
+            <P>
+              A strong demonstration path is: open the Action Center → show the {total} live actions
+              → inspect a schema → authenticate → read the current user and projects → create or
+              update a safe demo task with explicit approval → add a comment → show the resulting
+              Asana state → explain the write-safety policy and the shared MCP and API architecture.
+            </P>
+          </Section>
+
+          <Section id="decisions" title="12. Engineering decisions">
+            <H>Single-source connector core</H>
+            <P>
+              The most important architectural decision is keeping business and integration logic
+              inside one core. The Express API and MCP adapter are intentionally thin. This reduces
+              drift, simplifies testing, and ensures an AI agent and a human using the console
+              receive the same validation and safety behaviour.
+            </P>
+
+            <H>Real-client demo path</H>
+            <P>
+              Demo behaviour is designed around the same client, action, validation and error
+              pipeline rather than a completely separate feature implementation. This makes the
+              console a useful review surface for the shipping architecture.
+            </P>
+
+            <H>Least privilege</H>
+            <P>
+              OAuth scopes are limited to the operations actually required. Delete scopes are
+              intentionally absent, because the connector does not expose deletion.
+            </P>
+
+            <H>Honest compatibility</H>
+            <P>
+              The documentation distinguishes between live-verified behaviour and
+              implemented-but-not-live-verified behaviour. This matters for an integration project,
+              because an API contract can differ from an in-memory test implementation.
+            </P>
+          </Section>
+
+          <Section id="snapshot" title="13. Submission snapshot">
+            <Table
+              head={['Item', 'Status']}
+              rows={[
+                ['Connector version', 'v1.0.0'],
+                ['Actions', `${total} total`],
+                ['Required actions', '5 — preserved unchanged'],
+                ['Extended actions', '30'],
+                ['Authentication', 'PAT + OAuth 2.0 / PKCE'],
+                ['MCP', 'Implemented; stdio and Streamable HTTP; load tested to 200 sessions'],
+                ['Tests', '267'],
+                ['CI', 'Green — Node 20, 22 and 24'],
+                ['Delete operations', 'None'],
+                ['Primary author', 'Idrees Khaled'],
+                ['Organization', 'Doo'],
+                ['Prepared for', 'DOO Builders League'],
+              ]}
+            />
+            <P>
+              This document describes the implemented v1.0.0 connector architecture, action surface,
+              security model, testing status and known limitations.
+            </P>
+          </Section>
         </div>
       </div>
     </div>
@@ -511,11 +511,11 @@ const SECTIONS = [
   { id: 'errors', title: '6. Errors' },
   { id: 'console', title: '7. Console' },
   { id: 'testing', title: '8. Testing' },
-  { id: 'limitations', title: '9. Limitations' },
-  { id: 'setup', title: '10. Setup' },
-  { id: 'decisions', title: '11. Decisions' },
-  { id: 'snapshot', title: '12. Snapshot' },
-  { id: 'load', title: '13. Load testing' },
+  { id: 'load', title: '9. Load testing' },
+  { id: 'limitations', title: '10. Limitations' },
+  { id: 'setup', title: '11. Setup' },
+  { id: 'decisions', title: '12. Decisions' },
+  { id: 'snapshot', title: '13. Snapshot' },
 ] as const;
 
 /**
