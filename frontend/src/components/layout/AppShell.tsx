@@ -213,7 +213,8 @@ function Brand() {
       <AsanaMark />
       <div className="hidden min-w-0 lg:block">
         <div className="truncate text-sm font-semibold leading-tight text-(--color-ink)">
-          Asana Connector
+          {/* "Connector" is the highlighted word, per the palette. */}
+          Asana <span className="highlight">Connector</span>
         </div>
         <div className="truncate text-[10px] leading-tight text-(--color-ink-subtle)">
           Integration console
@@ -257,7 +258,9 @@ function MobileHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-(--color-hairline) bg-(--color-surface) px-4 md:hidden">
       <div className="flex items-center gap-2">
         <AsanaMark className="h-5 w-5" />
-        <span className="text-sm font-semibold">Asana Connector</span>
+        <span className="text-sm font-semibold">
+          Asana <span className="highlight">Connector</span>
+        </span>
       </div>
       <button
         type="button"
@@ -310,7 +313,7 @@ function MobileSheet({ onClose }: { onClose: () => void }) {
         type="button"
         aria-label="Close navigation menu"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
       />
 
       <div

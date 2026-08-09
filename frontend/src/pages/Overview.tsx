@@ -29,7 +29,7 @@ import {
   StatusPill,
   type StatusTone,
 } from '@/components/ui';
-import { useActivity, useConnection, useMetrics, useStatus } from '@/hooks/useConnector';
+import { useActions, useActivity, useConnection, useMetrics, useStatus } from '@/hooks/useConnector';
 import { formatDuration, formatRelativeTime } from '@/lib/utils';
 
 export function Overview() {
@@ -37,6 +37,7 @@ export function Overview() {
   const connection = useConnection();
   const metrics = useMetrics();
   const activity = useActivity(8);
+  const actions = useActions();
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -92,7 +93,11 @@ export function Overview() {
             icon={Network}
             label="MCP Adapter"
             value={status.data?.config.mcp.transport.toUpperCase() ?? '—'}
-            detail="5 tools exposed"
+            detail={
+              actions.data === undefined
+                ? 'Loading…'
+                : `${actions.data.actions.length} tools exposed`
+            }
             tone="success"
             statusText="Ready"
           />
@@ -283,12 +288,17 @@ function Metric({
   value: string;
   tone?: StatusTone;
 }) {
+  /*
+   * Numbers carry the vibrant purple by default, per the palette. Success and
+   * failure keep their semantic colours, because a red failure count reading
+   * purple would lose meaning that matters more than consistency.
+   */
   const colour =
     tone === 'success'
       ? 'text-(--color-success)'
       : tone === 'danger'
         ? 'text-(--color-danger)'
-        : 'text-(--color-ink)';
+        : 'text-(--color-accent)';
 
   return (
     <div className="bg-(--color-surface) p-4">

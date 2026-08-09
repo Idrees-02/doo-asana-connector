@@ -58,7 +58,7 @@ export function CreateTaskDialog({ projectId, projects, onClose }: CreateTaskDia
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[1px]" />
 
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-(--radius-lg) border border-(--color-hairline) bg-(--color-surface)">
           <header className="flex shrink-0 items-center justify-between border-b border-(--color-hairline) p-4">

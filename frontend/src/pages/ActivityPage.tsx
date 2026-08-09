@@ -21,14 +21,15 @@ import {
   TableSkeleton,
 } from '@/components/ui';
 import { CopyButton } from './Playground';
-import { useActivity } from '@/hooks/useConnector';
+import { useActions, useActivity } from '@/hooks/useConnector';
 import { formatDuration, formatTimestamp, prettyJson } from '@/lib/utils';
-import { ACTION_IDS, type ActivityEntry } from '@/types/api';
+import type { ActivityEntry } from '@/types/api';
 
 export function ActivityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [filter, setFilter] = useState<string>('all');
   const activity = useActivity(100);
+  const actions = useActions();
 
   const selectedId = searchParams.get('request');
   const entries = (activity.data?.entries ?? []).filter(
@@ -55,9 +56,9 @@ export function ActivityPage() {
             className="max-w-xs"
           >
             <option value="all">All actions</option>
-            {ACTION_IDS.map((id) => (
-              <option key={id} value={id}>
-                {id}
+            {(actions.data?.actions ?? []).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.id}
               </option>
             ))}
           </Select>
@@ -144,7 +145,7 @@ function RequestInspector({ entry, onClose }: { entry: ActivityEntry; onClose: (
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[1px]" />
 
         <Dialog.Content className="fixed right-0 top-0 z-50 flex h-full w-full flex-col border-l border-(--color-hairline) bg-(--color-surface) sm:w-[min(640px,100vw)]">
           <header className="flex shrink-0 items-start justify-between gap-3 border-b border-(--color-hairline) p-4">

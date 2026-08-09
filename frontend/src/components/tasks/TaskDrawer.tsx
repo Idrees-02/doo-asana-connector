@@ -36,7 +36,7 @@ export function TaskDrawer({ task, onClose, onChanged }: TaskDrawerProps) {
       <Dialog.Portal>
         {/* Radix handles focus trapping, escape, scroll lock and aria wiring —
             all things a hand-rolled drawer routinely gets wrong. */}
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[1px]" />
 
         <Dialog.Content
           className="fixed right-0 top-0 z-50 flex h-full w-full flex-col border-l border-(--color-hairline) bg-(--color-surface) sm:w-[min(560px,100vw)]"

@@ -168,7 +168,7 @@ function Counter({ label, value }: { label: string; value: number }) {
   return (
     <div className="bg-(--color-surface) p-4">
       <dt className="text-xs text-(--color-ink-muted)">{label}</dt>
-      <dd className="mt-1 text-xl font-semibold tabular-nums text-(--color-ink)">{value}</dd>
+      <dd className="figure mt-1 text-xl">{value}</dd>
     </div>
   );
 }

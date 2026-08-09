@@ -120,7 +120,7 @@ export interface ActionSummary {
   readonly id: string;
   readonly name: string;
   readonly description: string;
-  readonly category: 'projects' | 'tasks' | 'comments';
+  readonly category: 'projects' | 'tasks' | 'comments' | 'sections' | 'users' | 'tags';
   readonly type: 'read' | 'write';
   readonly safety: SafetyMetadata;
   readonly supportsPagination: boolean;
@@ -300,8 +300,8 @@ export interface HealthReport {
   }>;
 }
 
-/** The five action ids, fixed by the assignment. */
-export const ACTION_IDS = [
+/** The five action ids fixed by the assignment. Never renamed or reordered. */
+export const REQUIRED_ACTION_IDS = [
   'asana.list_projects',
   'asana.list_project_tasks',
   'asana.create_task',
@@ -309,4 +309,9 @@ export const ACTION_IDS = [
   'asana.add_comment',
 ] as const;
 
-export type ActionId = (typeof ACTION_IDS)[number];
+export type RequiredActionId = (typeof REQUIRED_ACTION_IDS)[number];
+
+/** Any of the connector's 35 action ids. Not a fixed literal union — the
+ *  connector is additive, so this is deliberately just `string` rather than
+ *  a union that would need editing every time an action is added. */
+export type ActionId = string;

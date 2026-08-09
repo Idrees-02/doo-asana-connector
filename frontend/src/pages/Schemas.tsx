@@ -7,37 +7,58 @@
  * so it cannot describe a contract the code does not enforce.
  */
 
-import { useState } from 'react';
-import { AsyncBoundary, PageHeader, Panel, PanelHeader, StatusPill, TableSkeleton } from '@/components/ui';
+import { useMemo, useState } from 'react';
+import { AsyncBoundary, Input, PageHeader, Panel, PanelHeader, StatusPill, TableSkeleton } from '@/components/ui';
 import { CopyButton } from './Playground';
-import { useSchema } from '@/hooks/useConnector';
+import { useActions, useSchema } from '@/hooks/useConnector';
 import { prettyJson } from '@/lib/utils';
-import { ACTION_IDS, type ActionId } from '@/types/api';
+import type { ActionId } from '@/types/api';
 
 export function Schemas() {
-  const [selected, setSelected] = useState<ActionId>('asana.list_projects');
+  const actions = useActions();
+  const [selected, setSelected] = useState<ActionId | null>(null);
+  const [search, setSearch] = useState('');
   const schema = useSchema(selected);
+
+  const allIds = actions.data?.actions.map((a) => a.id) ?? [];
+  // Default to the first action once the list has loaded.
+  const activeId = selected ?? allIds[0] ?? null;
+
+  const filteredIds = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return term.length === 0 ? allIds : allIds.filter((id) => id.toLowerCase().includes(term));
+  }, [allIds, search]);
 
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Schema Inspector"
-        description="Input and output JSON Schema for each action, generated from the connector's own validation schemas."
+        description="Input and output JSON Schema for each of the 35 actions, generated from the connector's own validation schemas."
       />
 
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
         {/* Action list */}
         <nav aria-label="Actions">
           <Panel className="overflow-hidden">
-            <ul>
-              {ACTION_IDS.map((id) => (
+            <div className="border-b border-(--color-hairline) p-2">
+              <Input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Filter actions…"
+                aria-label="Filter actions"
+                className="text-xs"
+              />
+            </div>
+            <ul className="max-h-[70vh] overflow-y-auto">
+              {filteredIds.map((id) => (
                 <li key={id}>
                   <button
                     type="button"
                     onClick={() => setSelected(id)}
-                    aria-current={selected === id ? 'true' : undefined}
+                    aria-current={activeId === id ? 'true' : undefined}
                     className={`w-full border-b border-(--color-hairline) px-3 py-2.5 text-left text-xs transition-colors last:border-0 ${
-                      selected === id
+                      activeId === id
                         ? 'bg-(--color-surface-3) font-medium text-(--color-ink)'
                         : 'text-(--color-ink-muted) hover:bg-(--color-surface-2)'
                     }`}

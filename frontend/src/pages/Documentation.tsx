@@ -7,9 +7,13 @@
  */
 
 import { PageHeader, Panel, PanelHeader, StatusPill } from '@/components/ui';
-import { ACTION_IDS } from '@/types/api';
+import { useActions } from '@/hooks/useConnector';
+import { REQUIRED_ACTION_IDS } from '@/types/api';
 
 export function Documentation() {
+  const actions = useActions();
+  const total = actions.data?.actions.length;
+
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
@@ -45,17 +49,28 @@ export function Documentation() {
         </Section>
 
         <Section id="actions" title="Actions">
-          <P>The five required actions, with their ids exactly as assigned:</P>
+          <P>The five actions required by the assignment, with their ids exactly as assigned:</P>
           <ul className="mt-2 space-y-1">
-            {ACTION_IDS.map((id) => (
+            {REQUIRED_ACTION_IDS.map((id) => (
               <li key={id}>
                 <code className="mono text-(--color-accent)">{id}</code>
               </li>
             ))}
           </ul>
           <P>
-            There is no delete action. It is not part of the assignment, so it is not implemented,
-            and the connector never requests a <code className="mono">:delete</code> OAuth scope.
+            The connector additionally implements 30 extended actions across tasks, projects,
+            sections, users, comments and tags —{' '}
+            <span className="figure">{total ?? 35}</span> actions in total. Every one follows the
+            same validation, safety-metadata and error-handling path as the five required actions;
+            see the <a href="/actions" className="text-(--color-accent) hover:underline">Action
+            Center</a> for the full, searchable list.
+          </P>
+          <P>
+            There is no delete action anywhere in the connector. It is not part of the assignment,
+            so it is not implemented, and the connector never requests a{' '}
+            <code className="mono">:delete</code> OAuth scope. Several actions are named
+            &ldquo;remove_*&rdquo;, but they remove an <em>association</em> — a task from a project,
+            a tag from a task — never the underlying object.
           </P>
         </Section>
 
