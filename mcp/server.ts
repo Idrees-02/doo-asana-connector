@@ -182,14 +182,16 @@ export function createMcpServer(connector: AsanaConnector): McpServer {
 async function main(): Promise<void> {
   // Silent: on stdio, any stdout write corrupts the JSON-RPC stream.
   const { connector, config } = bootstrap({ silent: true });
-  const server = createMcpServer(connector);
 
   if (config.mcp.transport === 'http') {
     const { startHttpTransport } = await import('./http-transport.js');
-    await startHttpTransport(server, config.mcp.httpPort);
+    // HTTP serves many clients at once, so it builds a server per session
+    // rather than sharing one. stdio is one client by construction.
+    await startHttpTransport(() => createMcpServer(connector), config.mcp.httpPort);
     return;
   }
 
+  const server = createMcpServer(connector);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
