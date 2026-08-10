@@ -15,11 +15,19 @@
  *      the page reads identically as a still document.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronDown, LayoutDashboard, Network, ShieldCheck, Zap } from 'lucide-react';
 
 import { useActions, useStatus } from '@/hooks/useConnector';
+
+/*
+ * three.js and the model are a large payload for something decorative, so the
+ * whole thing is split out and fetched after the page is interactive.
+ */
+const Signpost3D = lazy(() =>
+  import('@/components/Signpost3D').then((m) => ({ default: m.Signpost3D })),
+);
 
 export function Welcome() {
   const status = useStatus();
@@ -47,7 +55,12 @@ export function Welcome() {
   return (
     <div ref={stage} className="welcome min-h-dvh">
       <Aurora />
-      <Signpost />
+
+      <div className="welcome-signpost" aria-hidden="true">
+        <Suspense fallback={null}>
+          <Signpost3D />
+        </Suspense>
+      </div>
 
       <main className="welcome-shift relative mx-auto flex min-h-dvh max-w-5xl flex-col items-center justify-center px-6 py-20 text-center">
         <div className="welcome-rise" style={{ ...rise(0), color: 'var(--color-accent)' }}>
@@ -389,202 +402,6 @@ function Wordmark({ className = 'h-9 w-auto' }: { className?: string }) {
 
       <rect width="580" height="226" fill="currentColor" mask="url(#doo-counters)" />
     </svg>
-  );
-}
-
-/**
- * A street signpost, built from the reference photo.
- *
- * A fluted cast-iron pole with a finial cap and three plates on scrollwork
- * brackets: Idrees Khaled and DOO to the right, Builders League to the left
- * between them. The post is fixed and full-height — it never moves, because a
- * signpost that slides with the page is not a signpost. Only the plates react,
- * swinging on their brackets as the page scrolls.
- *
- * Drawn as one SVG rather than assembled from divs: the brackets are curves,
- * and curves are what SVG is for. Colours are the console's own — white plates,
- * purple frames, dark purple ink — with no new hues introduced.
- *
- * Desktop only. Beside a centred column there is no room for it at narrow
- * widths, and a fixed element there would sit on top of the text.
- */
-function Signpost() {
-  return (
-    <div className="welcome-signpost" aria-hidden="true">
-      {/* The lamp's light stays put while the post turns beneath it. */}
-      <span className="welcome-post-lamplight" />
-
-      <div className="welcome-post-rotor">
-        <svg
-          viewBox="-90 0 480 1000"
-          preserveAspectRatio="xMidYMid meet"
-          className="welcome-post-svg"
-        >
-          <defs>
-            {/* Cast iron, lit from the left: the highlight is what makes a flat
-              rectangle read as a cylinder. */}
-            <linearGradient id="post-iron" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#241033" />
-              <stop offset="22%" stopColor="#3b1d55" />
-              <stop offset="44%" stopColor="#5b3a78" />
-              <stop offset="60%" stopColor="#33184a" />
-              <stop offset="100%" stopColor="#1a0b2b" />
-            </linearGradient>
-            <linearGradient id="post-plate" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#fff" />
-              <stop offset="100%" stopColor="#f7f5fa" />
-            </linearGradient>
-          </defs>
-
-          {/* ---- Pole ---- */}
-          <rect x="148" y="150" width="44" height="850" fill="url(#post-iron)" />
-          {/* Flutes: three lines are enough to read as a fluted column. */}
-          <line
-            x1="158"
-            y1="150"
-            x2="158"
-            y2="1000"
-            stroke="#1a0b2b"
-            strokeWidth="1.5"
-            opacity="0.8"
-          />
-          <line
-            x1="170"
-            y1="150"
-            x2="170"
-            y2="1000"
-            stroke="#7a5a9c"
-            strokeWidth="1.5"
-            opacity="0.45"
-          />
-          <line
-            x1="182"
-            y1="150"
-            x2="182"
-            y2="1000"
-            stroke="#1a0b2b"
-            strokeWidth="1.5"
-            opacity="0.8"
-          />
-
-          {/* Collars, so the shaft has joints rather than being one long bar. */}
-          <rect x="142" y="150" width="56" height="14" rx="3" fill="#2b1442" />
-          <rect x="142" y="700" width="56" height="12" rx="3" fill="#2b1442" />
-
-          {/* ---- Finial ---- */}
-          <ellipse cx="170" cy="130" rx="28" ry="9" fill="#2b1442" />
-          <path
-            d="M170 64c15 0 26 15 26 32 0 15-11 26-26 26s-26-11-26-26c0-17 11-32 26-32z"
-            fill="url(#post-iron)"
-          />
-          <path
-            d="M144 98c8 11 17 15 26 15s18-4 26-15"
-            stroke="#7a5a9c"
-            strokeWidth="2"
-            fill="none"
-            opacity="0.55"
-          />
-          <circle cx="170" cy="58" r="6" fill="#2b1442" />
-
-          {/* The lamp: a glass housing under the finial, lit from inside. */}
-          <path
-            d="M146 132h48l10 46a12 12 0 0 1-12 14h-44a12 12 0 0 1-12-14z"
-            fill="#f3e8ff"
-            opacity="0.92"
-          />
-          <path
-            d="M146 132h48l10 46a12 12 0 0 1-12 14h-44a12 12 0 0 1-12-14z"
-            fill="none"
-            stroke="#2b1442"
-            strokeWidth="3"
-          />
-          <ellipse className="welcome-post-filament" cx="170" cy="164" rx="13" ry="16" />
-
-          {/* ---- Signs ---- */}
-          <g className="welcome-post-sign welcome-post-sign-1">
-            <Bracket side="right" y={300} />
-            <Plate side="right" y={252} label="Idrees Khaled" width={172} />
-          </g>
-
-          <g className="welcome-post-sign welcome-post-sign-2">
-            <Bracket side="left" y={452} />
-            <Plate side="left" y={404} label="Builders League" width={184} />
-          </g>
-
-          <g className="welcome-post-sign welcome-post-sign-3">
-            <Bracket side="right" y={604} />
-            <Plate side="right" y={556} label="DOO" width={118} />
-          </g>
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-/** The scrollwork arm holding a plate. Mirrored for the left-hand side. */
-function Bracket({ side, y }: { side: 'left' | 'right'; y: number }) {
-  const flip = side === 'left' ? -1 : 1;
-
-  return (
-    <g transform={`translate(170 ${y}) scale(${flip} 1)`} stroke="#2b1442" fill="none">
-      {/* Mounting blocks bolted to the shaft. */}
-      <rect x="16" y="-60" width="13" height="22" rx="2" fill="#2b1442" stroke="none" />
-      <rect x="16" y="-10" width="13" height="22" rx="2" fill="#2b1442" stroke="none" />
-      <circle cx="22.5" cy="-49" r="2.5" fill="#8b6ba8" stroke="none" />
-      <circle cx="22.5" cy="1" r="2.5" fill="#8b6ba8" stroke="none" />
-
-      {/* The arm, and the scrollwork curling under it. */}
-      <path d="M24 -8 L104 -8" strokeWidth="6" strokeLinecap="round" />
-      <path
-        d="M34 -8c0 18 11 29 24 29s22-9 22-20-9-18-18-13"
-        strokeWidth="5"
-        strokeLinecap="round"
-      />
-      <path d="M82 -8c0 15 9 24 20 24s17-8 17-17" strokeWidth="5" strokeLinecap="round" />
-      <circle cx="58" cy="18" r="5.5" strokeWidth="4" />
-      <circle cx="102" cy="13" r="4.5" strokeWidth="4" />
-    </g>
-  );
-}
-
-/** A street plate: white face, purple frame, dark purple type. */
-function Plate({
-  side,
-  y,
-  label,
-  width,
-}: {
-  side: 'left' | 'right';
-  y: number;
-  label: string;
-  width: number;
-}) {
-  const height = 58;
-  const x = side === 'right' ? 200 : 140 - width;
-
-  return (
-    <g>
-      {/* Outer lavender edge, purple frame, white face — the three layers a
-          real enamelled sign has. */}
-      <rect x={x - 5} y={y - 5} width={width + 10} height={height + 10} rx="11" fill="#e9d5ff" />
-      <rect x={x} y={y} width={width} height={height} rx="7" fill="var(--color-accent-strong)" />
-      <rect
-        x={x + 7}
-        y={y + 7}
-        width={width - 14}
-        height={height - 14}
-        rx="4"
-        fill="url(#post-plate)"
-      />
-      <text
-        x={x + width / 2}
-        y={y + height / 2 + 6}
-        textAnchor="middle"
-        className="welcome-post-label"
-      >
-        {label}
-      </text>
-    </g>
   );
 }
 

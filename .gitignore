@@ -53,3 +53,8 @@ tmp/
 # Local editor/agent tooling
 .claude/
 IMG_8810.jpg
+
+# The 91MB source model. The optimised 2.6MB build of it is committed at
+# frontend/public/models/signpost.glb; this original is not.
+*.glb
+!frontend/public/models/signpost.glb
