@@ -22,6 +22,9 @@ import type {
   ExecutionEnvelope,
   HealthReport,
   SchemaBundle,
+  AiStatus,
+  ChatReply,
+  ChatTurn,
 } from '@/types/api';
 
 const BASE = '/api';
@@ -208,6 +211,25 @@ export const api = {
 
   getHealth: (signal?: AbortSignal) =>
     request<HealthReport>('/health', signal === undefined ? {} : { signal }),
+
+  /* Assistant ----------------------------------------------------------- */
+
+  getAiStatus: (signal?: AbortSignal) =>
+    request<AiStatus>('/ai/status', signal === undefined ? {} : { signal }),
+
+  /**
+   * Ask the assistant.
+   *
+   * Returns a proposal instead of performing a write: the console renders it,
+   * the user approves, and the approved call goes through `execute` with
+   * `approved: true` like any other write.
+   */
+  chat: (messages: ReadonlyArray<ChatTurn>, signal?: AbortSignal) =>
+    request<ChatReply>('/ai/chat', {
+      method: 'POST',
+      body: { messages },
+      ...(signal === undefined ? {} : { signal }),
+    }),
 
   /* Demo controls — these endpoints exist only when the API is in demo mode. */
 

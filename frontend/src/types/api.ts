@@ -315,3 +315,33 @@ export type RequiredActionId = (typeof REQUIRED_ACTION_IDS)[number];
  *  connector is additive, so this is deliberately just `string` rather than
  *  a union that would need editing every time an action is added. */
 export type ActionId = string;
+
+/* -------------------------------------------------------------------------- */
+/* Assistant                                                                   */
+/* -------------------------------------------------------------------------- */
+
+export interface AiStatus {
+  readonly enabled: boolean;
+  readonly model: string | null;
+  readonly provider: string;
+}
+
+export interface ChatTurn {
+  readonly role: 'user' | 'assistant';
+  readonly content: string;
+}
+
+/** A write the assistant wants to make. Never executed without approval. */
+export interface ChatProposal {
+  readonly actionId: string;
+  readonly name: string;
+  readonly input: unknown;
+  readonly duplicateBehavior: string;
+  readonly risk: string;
+}
+
+export interface ChatReply {
+  readonly reply: string;
+  readonly steps: ReadonlyArray<{ actionId: string; ok: boolean; summary: string }>;
+  readonly proposal: ChatProposal | null;
+}

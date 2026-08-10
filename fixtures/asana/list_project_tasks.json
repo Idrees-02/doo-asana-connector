@@ -1,0 +1,55 @@
+{
+  "data": [
+    {
+      "gid": "1217301043120150",
+      "assignee": null,
+      "completed": true,
+      "created_at": "2026-08-08T23:56:13.427Z",
+      "due_on": null,
+      "modified_at": "2026-08-08T23:56:16.621Z",
+      "name": "[connector-smoke] 2026-08-08T23:56:12.928Z",
+      "notes": "Updated by the smoke test.",
+      "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390/task/1217301043120150"
+    },
+    {
+      "gid": "1217301120255878",
+      "assignee": {
+        "gid": "1217300136129834",
+        "name": "Idrees Khaled"
+      },
+      "completed": false,
+      "created_at": "2026-08-08T23:33:57.872Z",
+      "due_on": "2026-08-11",
+      "modified_at": "2026-08-10T21:01:11.813Z",
+      "name": "Task 1",
+      "notes": "",
+      "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390/task/1217301120255878"
+    },
+    {
+      "gid": "1217301120255880",
+      "assignee": {
+        "gid": "1217300136129834",
+        "name": "Idrees Khaled"
+      },
+      "completed": false,
+      "created_at": "2026-08-08T23:33:58.077Z",
+      "due_on": "2026-08-12",
+      "modified_at": "2026-08-08T23:33:59.717Z",
+      "name": "Task 2",
+      "notes": "",
+      "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390/task/1217301120255880"
+    },
+    {
+      "gid": "1217301120255882",
+      "assignee": null,
+      "completed": false,
+      "created_at": "2026-08-08T23:33:58.213Z",
+      "due_on": "2026-08-13",
+      "modified_at": "2026-08-08T23:33:58.459Z",
+      "name": "Task 3",
+      "notes": "",
+      "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390/task/1217301120255882"
+    }
+  ],
+  "next_page": null
+}

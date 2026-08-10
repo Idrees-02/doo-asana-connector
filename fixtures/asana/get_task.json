@@ -1,0 +1,19 @@
+{
+  "data": {
+    "gid": "1217301043120150",
+    "assignee": null,
+    "completed": true,
+    "created_at": "2026-08-08T23:56:13.427Z",
+    "due_on": null,
+    "modified_at": "2026-08-08T23:56:16.621Z",
+    "name": "[connector-smoke] 2026-08-08T23:56:12.928Z",
+    "notes": "Updated by the smoke test.",
+    "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390/task/1217301043120150",
+    "projects": [
+      {
+        "gid": "1217300991109390",
+        "name": "Idrees's first project"
+      }
+    ]
+  }
+}

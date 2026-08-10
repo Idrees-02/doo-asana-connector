@@ -267,3 +267,127 @@
     background: var(--color-surface-2);
   }
 }
+
+/* ==========================================================================
+   Landing page
+   
+   Scoped under .welcome so none of this leaks into the console, which has a
+   deliberately quiet visual language. The palette is DOO's: near-black plum
+   with the connector's purple, lit from two moving sources.
+   ========================================================================== */
+
+.welcome {
+  /*
+   * The console's own purple ramp, not a second palette. --color-accent and
+   * --color-accent-strong are the same tokens every button and link uses; the
+   * ink is the darkest step of that ramp, matching the DOO mark's background.
+   */
+  --welcome-ink: #150726;
+  --welcome-accent: #7c3aed; /* --color-accent, pinned: the landing is dark-only */
+  --welcome-accent-deep: #6b21a8; /* --color-accent-strong */
+
+  background:
+    radial-gradient(120% 90% at 50% -10%, #2a1148 0%, transparent 60%), var(--welcome-ink);
+  color: #fff;
+  /* The landing owns its own theme in both light and dark mode. */
+  color-scheme: dark;
+}
+
+.welcome-rise {
+  transition:
+    opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.welcome-orb {
+  position: absolute;
+  border-radius: 9999px;
+  /* Large, soft and low-contrast: atmosphere, never a shape the eye lands on. */
+  filter: blur(90px);
+  opacity: 0.5;
+}
+
+.welcome-orb-a {
+  top: -14rem;
+  left: -8rem;
+  width: 38rem;
+  height: 38rem;
+  background: radial-gradient(circle, var(--welcome-accent) 0%, transparent 70%);
+  animation: welcome-drift-a 22s ease-in-out infinite alternate;
+}
+
+.welcome-orb-b {
+  right: -10rem;
+  bottom: -16rem;
+  width: 34rem;
+  height: 34rem;
+  background: radial-gradient(circle, var(--welcome-accent-deep) 0%, transparent 70%);
+  animation: welcome-drift-b 26s ease-in-out infinite alternate;
+}
+
+/* A faint rule grid, masked out at the edges so it never draws a hard border. */
+.welcome-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(90% 70% at 50% 30%, #000 0%, transparent 75%);
+}
+
+.welcome-card-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(60% 60% at 50% 0%, rgb(167 139 250 / 28%), transparent 70%);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.welcome-card:hover .welcome-card-glow,
+.welcome-card:focus-visible .welcome-card-glow {
+  opacity: 1;
+}
+
+.welcome-bob {
+  animation: welcome-bob 2.4s ease-in-out infinite;
+}
+
+@keyframes welcome-drift-a {
+  to {
+    transform: translate3d(6rem, 4rem, 0) scale(1.12);
+  }
+}
+
+@keyframes welcome-drift-b {
+  to {
+    transform: translate3d(-5rem, -3rem, 0) scale(1.08);
+  }
+}
+
+@keyframes welcome-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+/*
+ * Motion here is decoration only: with it disabled the landing is a static
+ * page that says exactly the same thing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-orb,
+  .welcome-bob {
+    animation: none;
+  }
+
+  .welcome-rise {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

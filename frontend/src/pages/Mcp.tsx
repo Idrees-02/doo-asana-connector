@@ -108,6 +108,20 @@ export function Mcp() {
           />
 
           <div>
+            <p className="mb-1.5 text-xs font-medium text-(--color-ink)">This deployment</p>
+            <p className="mb-2 text-[11px] text-(--color-ink-subtle)">
+              The API server mounts the same adapter, so this origin is already an MCP endpoint. It
+              executes real actions with the server&apos;s credential, so it requires a bearer
+              token.
+            </p>
+            <CodeBlock code={`${window.location.origin}/mcp`} />
+            <p className="mt-1.5 mb-3 text-[11px] text-(--color-ink-subtle)">
+              Send <code className="mono">Authorization: Bearer &lt;MCP_AUTH_TOKEN&gt;</code>.
+              Liveness is at <code className="mono">/mcp/health</code> and needs no credential.
+            </p>
+          </div>
+
+          <div>
             <p className="mb-1.5 text-xs font-medium text-(--color-ink)">
               Claude Desktop configuration
             </p>
@@ -141,9 +155,7 @@ export function Mcp() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Network className="h-3.5 w-3.5 text-(--color-ink-subtle)" aria-hidden="true" />
                     {/* MCP tool names replace dots with underscores. */}
-                    <code className="mono text-(--color-ink)">
-                      {action.id.replace(/\./g, '_')}
-                    </code>
+                    <code className="mono text-(--color-ink)">{action.id.replace(/\./g, '_')}</code>
                     <StatusPill tone={action.type === 'write' ? 'warning' : 'info'}>
                       {action.type === 'write' ? 'readOnlyHint: false' : 'readOnlyHint: true'}
                     </StatusPill>
@@ -171,15 +183,7 @@ export function Mcp() {
   );
 }
 
-function CommandBlock({
-  label,
-  command,
-  note,
-}: {
-  label: string;
-  command: string;
-  note: string;
-}) {
+function CommandBlock({ label, command, note }: { label: string; command: string; note: string }) {
   return (
     <div>
       <p className="mb-1 text-xs font-medium text-(--color-ink)">{label}</p>

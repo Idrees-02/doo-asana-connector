@@ -187,7 +187,9 @@ async function main(): Promise<void> {
     const { startHttpTransport } = await import('./http-transport.js');
     // HTTP serves many clients at once, so it builds a server per session
     // rather than sharing one. stdio is one client by construction.
-    await startHttpTransport(() => createMcpServer(connector), config.mcp.httpPort);
+    await startHttpTransport(() => createMcpServer(connector), config.mcp.httpPort, {
+      authToken: config.mcp.authToken,
+    });
     return;
   }
 

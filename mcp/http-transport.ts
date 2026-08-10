@@ -1,28 +1,28 @@
 /**
  * Streamable HTTP transport for the MCP server.
  *
- * stdio is the default and is what the mentor and Claude Desktop use locally.
- * This module exists so the same adapter can be exposed over HTTPS when
- * deployed, without a second implementation — it wraps the identical
- * `McpServer` built in `server.ts`.
+ * stdio is the default and is what Claude Desktop uses locally. This module
+ * exists so the same adapter can be exposed over HTTPS when deployed, without
+ * a second implementation — it wraps the identical `McpServer` built in
+ * `server.ts`.
  *
- * Loaded lazily (dynamic import) so a local stdio run never pays for the HTTP
- * stack.
+ * It is written as a request handler first and a server second, so the console
+ * process can mount it at /mcp instead of running a second process on a second
+ * port. `startHttpTransport` is the standalone wrapper around that handler.
  *
  * One transport and one `McpServer` are created per MCP session, keyed by the
  * session id the SDK issues at initialize. stdio is inherently single-client —
  * one process, one pipe — but HTTP is not, and a single shared transport
  * answers the second client's initialize with "Server already initialized".
  *
- * Deployment note: terminate TLS at the platform's load balancer or reverse
- * proxy and route to this port. The process speaks plain HTTP on purpose —
- * managing certificates in-process would be worse than letting the platform do
- * what it already does well.
+ * Deployment note: terminate TLS at the platform's load balancer and route to
+ * this process. It speaks plain HTTP on purpose — managing certificates
+ * in-process would be worse than letting the platform do what it does well.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -42,24 +42,39 @@ const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const SESSION_IDLE_MS = 10 * 60 * 1000;
 const SESSION_SWEEP_MS = 60 * 1000;
 
-/** What the caller needs in order to observe and stop the server. */
-export interface HttpTransportHandle {
-  /** The bound address, so a caller that passed port 0 can discover the port. */
-  readonly address: () => AddressInfo | string | null;
+export interface McpHandlerOptions {
+  /**
+   * Hosts accepted by DNS-rebinding protection. Clients send Host with the
+   * port, so port-qualified forms must be listed or every request is refused.
+   * An empty list disables the check — correct only behind a proxy that
+   * already fixes the host, and never a substitute for `authToken`.
+   */
+  readonly allowedHosts: readonly string[];
+  /** When set, every MCP request must carry `Authorization: Bearer <token>`. */
+  readonly authToken?: string | undefined;
+}
+
+export interface McpHandler {
+  /** Serves one MCP request. The caller has already matched the path. */
+  readonly handleMcp: (req: IncomingMessage, res: ServerResponse) => void;
+  /** Liveness, deliberately unauthenticated so platform probes work. */
+  readonly handleHealth: (res: ServerResponse) => void;
+  readonly sessionCount: () => number;
   readonly close: () => Promise<void>;
 }
 
-export async function startHttpTransport(
+/**
+ * The transport as a plain request handler, so it can live inside an existing
+ * HTTP server. Deploying one process is cheaper than two, and it keeps the
+ * console and the MCP endpoint on the same origin.
+ */
+export function createMcpHandler(
   // A factory, not an instance: each session needs its own server object.
   createServerInstance: () => McpServer,
-  port: number,
-): Promise<HttpTransportHandle> {
+  options: McpHandlerOptions,
+): McpHandler {
   const sessions = new Map<string, StreamableHTTPServerTransport>();
   const lastSeen = new Map<string, number>();
-
-  // Port 0 means "any free port", so the real one is only known after listen.
-  // Sessions are created later, so they read it then rather than from `port`.
-  let boundPort = port;
 
   const sweeper = setInterval(() => {
     const cutoff = Date.now() - SESSION_IDLE_MS;
@@ -73,33 +88,32 @@ export async function startHttpTransport(
   // The sweeper must never be the reason the process stays alive.
   sweeper.unref();
 
-  const httpServer = createServer((req, res) => {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+  /**
+   * The endpoint executes real writes against a real workspace using the
+   * server's own credential, so an open deployment is an open door. Compared
+   * in constant time: a byte-by-byte early exit leaks the token by timing.
+   */
+  function authorized(req: IncomingMessage): boolean {
+    const expected = options.authToken;
+    if (expected === undefined) return true;
 
-    // A liveness probe that does not require an MCP handshake, so platform
-    // health checks do not need to speak the protocol.
-    if (url.pathname === '/health') {
-      json(res, 200, { status: 'ok', transport: 'streamable-http', sessions: sessions.size });
-      return;
-    }
-
-    if (url.pathname !== MCP_PATH) {
-      json(res, 404, { error: `Not found. The MCP endpoint is ${MCP_PATH}.` });
-      return;
-    }
-
-    void route(req, res).catch(() => {
-      if (!res.headersSent) {
-        json(res, 500, {
-          jsonrpc: '2.0',
-          error: { code: -32603, message: 'Internal server error.' },
-          id: null,
-        });
-      }
-    });
-  });
+    const supplied = header(req, 'authorization')?.replace(/^Bearer\s+/i, '') ?? '';
+    const a = Buffer.from(supplied);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+  }
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!authorized(req)) {
+      res.setHeader('www-authenticate', 'Bearer');
+      json(res, 401, {
+        jsonrpc: '2.0',
+        error: { code: -32001, message: 'Unauthorized: a bearer token is required.' },
+        id: null,
+      });
+      return;
+    }
+
     const sessionId = header(req, SESSION_HEADER);
     if (sessionId !== undefined) lastSeen.set(sessionId, Date.now());
 
@@ -142,20 +156,10 @@ export async function startHttpTransport(
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
-      // DNS-rebinding protection: without it, a malicious page in the user's
-      // browser could reach a locally-bound MCP server via a hostname it
-      // controls. Harmless to enable, and the failure mode it prevents is
-      // severe. Clients send Host with the port, so the port-qualified forms
-      // have to be listed too, or every request is rejected as an invalid host.
-      enableDnsRebindingProtection: true,
-      allowedHosts: [
-        '127.0.0.1',
-        'localhost',
-        `127.0.0.1:${boundPort}`,
-        `localhost:${boundPort}`,
-        '[::1]',
-        `[::1]:${boundPort}`,
-      ],
+      // Without this, a malicious page in the user's browser could reach a
+      // locally-bound MCP server through a hostname it controls.
+      enableDnsRebindingProtection: options.allowedHosts.length > 0,
+      allowedHosts: [...options.allowedHosts],
       onsessioninitialized: (id: string) => {
         sessions.set(id, transport);
         lastSeen.set(id, Date.now());
@@ -171,15 +175,96 @@ export async function startHttpTransport(
     };
 
     /*
-     * The MCP SDK declares Transport.onclose as a required property that it then
-     * leaves unset, which `exactOptionalPropertyTypes` correctly objects to. The
-     * mismatch is in the SDK's type declaration, not in behaviour, so it is cast
-     * at this single boundary rather than relaxing strictness project-wide.
+     * The MCP SDK declares Transport.onclose as a required property that it
+     * then leaves unset, which `exactOptionalPropertyTypes` correctly objects
+     * to. The mismatch is in the SDK's type declaration, not in behaviour, so
+     * it is cast at this single boundary rather than relaxing strictness
+     * project-wide.
      */
     const server = createServerInstance();
     await server.connect(transport as unknown as Parameters<typeof server.connect>[0]);
     await transport.handleRequest(req, res, body);
   }
+
+  return {
+    handleMcp: (req, res) => {
+      void route(req, res).catch(() => {
+        if (res.headersSent) return;
+        json(res, 500, {
+          jsonrpc: '2.0',
+          error: { code: -32603, message: 'Internal server error.' },
+          id: null,
+        });
+      });
+    },
+
+    handleHealth: (res) => {
+      json(res, 200, {
+        status: 'ok',
+        transport: 'streamable-http',
+        sessions: sessions.size,
+        authRequired: options.authToken !== undefined,
+      });
+    },
+
+    sessionCount: () => sessions.size,
+
+    close: async () => {
+      clearInterval(sweeper);
+      await Promise.all([...sessions.values()].map((t) => t.close()));
+      sessions.clear();
+      lastSeen.clear();
+    },
+  };
+}
+
+/** What the caller needs in order to observe and stop the standalone server. */
+export interface HttpTransportHandle {
+  /** The bound address, so a caller that passed port 0 can discover the port. */
+  readonly address: () => AddressInfo | string | null;
+  readonly close: () => Promise<void>;
+}
+
+/** Standalone mode: the handler above, given a port of its own. */
+export async function startHttpTransport(
+  createServerInstance: () => McpServer,
+  port: number,
+  options?: Partial<McpHandlerOptions>,
+): Promise<HttpTransportHandle> {
+  // Port 0 means "any free port", so the real one is only known after listen.
+  // Sessions are created later, so the allowlist is read then, not now.
+  let boundPort = port;
+  const allowed = options?.allowedHosts;
+
+  const handler = createMcpHandler(createServerInstance, {
+    get allowedHosts() {
+      return (
+        allowed ?? [
+          '127.0.0.1',
+          'localhost',
+          `127.0.0.1:${boundPort}`,
+          `localhost:${boundPort}`,
+          '[::1]',
+          `[::1]:${boundPort}`,
+        ]
+      );
+    },
+    authToken: options?.authToken,
+  });
+
+  const httpServer = createServer((req, res) => {
+    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+
+    if (url.pathname === '/health') {
+      handler.handleHealth(res);
+      return;
+    }
+    if (url.pathname !== MCP_PATH) {
+      json(res, 404, { error: `Not found. The MCP endpoint is ${MCP_PATH}.` });
+      return;
+    }
+    handler.handleMcp(req, res);
+  });
 
   await new Promise<void>((resolve) => {
     httpServer.listen(port, () => {
@@ -201,10 +286,7 @@ export async function startHttpTransport(
     close: async () => {
       process.off('SIGINT', shutdown);
       process.off('SIGTERM', shutdown);
-      clearInterval(sweeper);
-      await Promise.all([...sessions.values()].map((t) => t.close()));
-      sessions.clear();
-      lastSeen.clear();
+      await handler.close();
       await new Promise<void>((resolve) => httpServer.close(() => resolve()));
     },
   };

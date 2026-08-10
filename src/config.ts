@@ -88,6 +88,16 @@ const envSchema = z.object({
   // http exposes the Streamable HTTP transport for a deployed endpoint.
   MCP_TRANSPORT: z.enum(['stdio', 'http']).catch('stdio'),
   MCP_HTTP_PORT: intFromString(1, 65_535, 8788),
+  // Bearer token guarding the public /mcp endpoint. Blank => open, which is
+  // fine locally and unacceptable once deployed: the endpoint drives a real
+  // Asana workspace with the server's own credential.
+  MCP_AUTH_TOKEN: optionalString,
+
+  // AI assistant ----------------------------------------------------------
+  // Groq inference. Blank => the assistant is disabled and the console hides
+  // it, so the app still runs with no AI provider configured.
+  GROQ_API_KEY: optionalString,
+  GROQ_MODEL: z.string().trim().catch('llama-3.3-70b-versatile'),
 
   // At-rest encryption for OAuth tokens. Blank => memory only.
   CREDENTIAL_ENCRYPTION_KEY: optionalString,
@@ -127,6 +137,15 @@ export interface ServerConfig {
 export interface McpConfig {
   readonly transport: 'stdio' | 'http';
   readonly httpPort: number;
+  /** Bearer token required by the HTTP endpoint, when one is configured. */
+  readonly authToken: string | undefined;
+}
+
+export interface AiConfig {
+  readonly apiKey: string | undefined;
+  readonly model: string;
+  /** Convenience flag: the console asks this rather than probing for a key. */
+  readonly enabled: boolean;
 }
 
 export interface AppConfig {
@@ -143,6 +162,7 @@ export interface AppConfig {
   readonly oauth: OAuthConfig | undefined;
   readonly server: ServerConfig;
   readonly mcp: McpConfig;
+  readonly ai: AiConfig;
   readonly credentialEncryptionKey: string | undefined;
   readonly isProduction: boolean;
 }
@@ -211,6 +231,12 @@ export function buildConfig(raw: NodeJS.ProcessEnv): AppConfig {
     mcp: {
       transport: env.MCP_TRANSPORT,
       httpPort: env.MCP_HTTP_PORT,
+      authToken: env.MCP_AUTH_TOKEN,
+    },
+    ai: {
+      apiKey: env.GROQ_API_KEY,
+      model: env.GROQ_MODEL,
+      enabled: env.GROQ_API_KEY !== undefined,
     },
     credentialEncryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
     isProduction: env.NODE_ENV === 'production',
@@ -297,7 +323,15 @@ export interface SafeConfigDescription {
     readonly credentialFingerprint: string | null;
   };
   readonly server: { readonly port: number; readonly corsOrigin: string };
-  readonly mcp: { readonly transport: string; readonly httpPort: number };
+  readonly mcp: {
+    readonly transport: string;
+    readonly httpPort: number;
+    /** Whether the public endpoint is guarded. Never the token itself. */
+    readonly authRequired: boolean;
+  };
+  /** Whether an assistant provider is configured. Never the key itself. */
+  readonly aiEnabled: boolean;
+  readonly aiModel: string | null;
   readonly credentialEncryptionEnabled: boolean;
 }
 
@@ -321,7 +355,13 @@ export function describeConfig(cfg: AppConfig, fingerprint: string | null = null
       credentialFingerprint: fingerprint,
     },
     server: { port: cfg.server.port, corsOrigin: cfg.server.corsOrigin },
-    mcp: { transport: cfg.mcp.transport, httpPort: cfg.mcp.httpPort },
+    mcp: {
+      transport: cfg.mcp.transport,
+      httpPort: cfg.mcp.httpPort,
+      authRequired: cfg.mcp.authToken !== undefined,
+    },
+    aiEnabled: cfg.ai.enabled,
+    aiModel: cfg.ai.enabled ? cfg.ai.model : null,
     credentialEncryptionEnabled: cfg.credentialEncryptionKey !== undefined,
   };
 }

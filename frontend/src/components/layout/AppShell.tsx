@@ -28,6 +28,7 @@ import {
   Network,
   Plug,
   Settings,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -46,7 +47,8 @@ const NAV_SECTIONS: ReadonlyArray<{ title: string; items: readonly NavItem[] }> 
   {
     title: 'Workspace',
     items: [
-      { to: '/', label: 'Overview', icon: LayoutDashboard, primary: true },
+      { to: '/overview', label: 'Overview', icon: LayoutDashboard, primary: true },
+      { to: '/assistant', label: 'Assistant', icon: Sparkles, primary: true },
       { to: '/projects', label: 'Projects', icon: Boxes, primary: true },
       { to: '/tasks', label: 'Tasks', icon: ListTodo, primary: true },
     ],
@@ -55,7 +57,9 @@ const NAV_SECTIONS: ReadonlyArray<{ title: string; items: readonly NavItem[] }> 
     title: 'Developer',
     items: [
       { to: '/actions', label: 'Actions', icon: Plug, primary: true },
-      { to: '/playground', label: 'API Playground', icon: FlaskConical, primary: true },
+      // Five primaries exactly: the bottom tab bar wraps to a second row at
+      // six, and the assistant earns the slot over the raw playground.
+      { to: '/playground', label: 'API Playground', icon: FlaskConical },
       { to: '/activity', label: 'Activity', icon: Activity },
       { to: '/schemas', label: 'Schemas', icon: FileJson },
       { to: '/mcp', label: 'MCP', icon: Network },

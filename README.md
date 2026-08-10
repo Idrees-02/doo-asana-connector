@@ -242,6 +242,45 @@ The adapter iterates `connector.listActions()` and registers each as a tool. It
 contains no Asana endpoint, no schema and no business logic — a test asserts the
 exposed tool ids equal the connector's action ids, so it cannot drift.
 
+### Over HTTPS
+
+The API server also mounts the same adapter at `/mcp`, so a deployment exposes
+both surfaces on one origin and one process:
+
+```
+https://<your-host>/mcp          # Streamable HTTP endpoint
+https://<your-host>/mcp/health   # liveness, unauthenticated
+```
+
+**Set `MCP_AUTH_TOKEN` before deploying.** The endpoint executes real actions
+using the server's own Asana credential, so without a token anyone who learns
+the URL can drive the workspace. Clients send it as a bearer token:
+
+```
+Authorization: Bearer <MCP_AUTH_TOKEN>
+```
+
+The standalone process (`npm run mcp` with `MCP_TRANSPORT=http`) remains
+available for running MCP on a port of its own.
+
+---
+
+## Assistant
+
+The console includes an assistant: plain language in, connector actions out. It
+is a third adapter over the same core, and it holds one rule —
+
+**The assistant never writes.** Reads run immediately; a write is returned as a
+proposal, rendered with its duplicate-behaviour warning, and executed only after
+the user approves it — through the same action route with `approved: true`.
+
+That matters because Asana text flows back into the model, which is the shape of
+a prompt-injection attack, and because this connector cannot delete what it
+creates.
+
+Set `GROQ_API_KEY` to enable it. Without a key the console runs unchanged and
+hides the assistant.
+
 ---
 
 ## Assignment checklist

@@ -30,7 +30,7 @@ afterEach(async () => {
   await Promise.all(started.splice(0).map((s) => s.close()));
 });
 
-async function startServer(): Promise<URL> {
+async function startServer(options?: { authToken?: string }): Promise<URL> {
   const store = new DemoStore();
   const connector = createConnector({
     config: buildConfig({ ASANA_MODE: 'demo' }),
@@ -38,7 +38,11 @@ async function startServer(): Promise<URL> {
   });
 
   // Port 0: the OS picks a free port, so parallel test files never collide.
-  const handle = await startHttpTransport(() => createMcpServer(connector), 0);
+  const handle = await startHttpTransport(
+    () => createMcpServer(connector),
+    0,
+    options?.authToken === undefined ? undefined : { authToken: options.authToken },
+  );
   started.push(handle);
 
   const { port } = handle.address() as AddressInfo;
@@ -91,6 +95,71 @@ describe('MCP Streamable HTTP transport', () => {
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error?: { message?: string } };
     expect(body.error?.message).toMatch(/session/i);
+  });
+
+  it('refuses an unauthenticated request when a token is configured', async () => {
+    const url = await startServer({ authToken: 'secret-token' }); // secrets-scan-ignore
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+    });
+
+    // The deployed endpoint drives a real workspace with the server's own
+    // credential, so an open door here is the whole risk.
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toBe('Bearer');
+  });
+
+  it('accepts the configured bearer token', async () => {
+    const url = await startServer({ authToken: 'secret-token' }); // secrets-scan-ignore
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: 'Bearer secret-token', // secrets-scan-ignore
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: { name: 'test', version: '1.0.0' },
+        },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects a token of the wrong value but the right length', async () => {
+    const url = await startServer({ authToken: 'secret-token' }); // secrets-scan-ignore
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: 'Bearer secret-tokeX', // secrets-scan-ignore
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+    });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('leaves the liveness probe open so platform health checks work', async () => {
+    const url = await startServer({ authToken: 'secret-token' }); // secrets-scan-ignore
+
+    const response = await fetch(new URL('/health', url));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ authRequired: true });
   });
 
   it('answers the liveness probe without an MCP handshake', async () => {

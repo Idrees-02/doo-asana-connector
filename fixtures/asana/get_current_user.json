@@ -1,0 +1,13 @@
+{
+  "data": {
+    "gid": "1217300136129834",
+    "email": "builder@example.com",
+    "name": "Idrees Khaled",
+    "workspaces": [
+      {
+        "gid": "1217300136129846",
+        "name": "My workspace"
+      }
+    ]
+  }
+}

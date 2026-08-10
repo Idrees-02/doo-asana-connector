@@ -26,6 +26,7 @@
     "mcp:inspect": "npx --yes @modelcontextprotocol/inspector tsx mcp/server.ts",
     "generate": "tsx scripts/generate-all.ts",
     "smoke:live": "tsx scripts/smoke-live.ts",
+    "fixtures:capture": "tsx scripts/capture-fixtures.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:frontend": "npm run test --workspace frontend",

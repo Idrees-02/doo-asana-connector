@@ -88,8 +88,8 @@ export function Documentation() {
                 endpoint.
               </B>
               <B term="MCP support">
-                through the official Model Context Protocol SDK, using a thin adapter over the
-                shared core.
+                through the official Model Context Protocol SDK, over stdio and over HTTPS at{' '}
+                <code className="mono">/mcp</code>, guarded by a bearer token.
               </B>
               <B term="Write safety">
                 with explicit approval metadata and conservative retry behaviour.
@@ -249,6 +249,10 @@ export function Documentation() {
               <B term="Activity">filters and views use the live action registry.</B>
               <B term="Authentication">supports the configured PAT and OAuth paths.</B>
               <B term="Validation and error states">surface connector responses cleanly.</B>
+              <B term="Assistant">
+                plain language over the same actions; reads run immediately, writes wait for
+                approval.
+              </B>
               <B term="Accessibility">
                 colour contrast was checked against WCAG; a slate-on-lavender badge contrast issue
                 was found and fixed.

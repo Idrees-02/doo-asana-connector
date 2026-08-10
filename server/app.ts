@@ -29,6 +29,8 @@ import { ERROR_CODES } from '../src/errors/codes.js';
 import { generateRequestId } from '../src/runtime/request-id.js';
 import { ActivityLog } from './activity.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerMcpRoute } from './routes/mcp.js';
+import { registerAiRoutes } from './routes/ai.js';
 import { toJsonSchema } from '../src/schemas/json-schema.js';
 
 export interface ApiServer {
@@ -66,6 +68,13 @@ export function createApp(runtime: Bootstrapped): ApiServer {
       credentials: true,
     }),
   );
+
+  /*
+   * MCP is mounted before the JSON body parser on purpose: the transport reads
+   * the raw stream itself, and a parser that had already drained it would
+   * leave the transport waiting on a body that never arrives.
+   */
+  registerMcpRoute(app, runtime);
 
   // Bounded body size: an unbounded JSON body is a trivial memory DoS.
   app.use(express.json({ limit: '1mb' }));
@@ -278,6 +287,7 @@ export function createApp(runtime: Bootstrapped): ApiServer {
   }
 
   registerAuthRoutes(app, runtime);
+  registerAiRoutes(app, runtime);
 
   /* ---------------------------------------------------------------- */
   /* Console (single-origin deploys)                                   */

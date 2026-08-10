@@ -1,0 +1,38 @@
+{
+  "data": [
+    {
+      "gid": "1217301043120152",
+      "created_at": "2026-08-08T23:56:13.520Z",
+      "created_by": {
+        "gid": "1217300136129834",
+        "name": "Idrees Khaled"
+      },
+      "text": "Idrees Khaled added this task to Idrees's first project",
+      "type": "system",
+      "resource_subtype": "added_to_project"
+    },
+    {
+      "gid": "1217301043140125",
+      "created_at": "2026-08-08T23:56:15.853Z",
+      "created_by": {
+        "gid": "1217300136129834",
+        "name": "Idrees Khaled"
+      },
+      "text": "Comment posted by the connector smoke test.",
+      "type": "comment",
+      "resource_subtype": "comment_added"
+    },
+    {
+      "gid": "1217301264430013",
+      "created_at": "2026-08-08T23:56:16.619Z",
+      "created_by": {
+        "gid": "1217300136129834",
+        "name": "Idrees Khaled"
+      },
+      "text": "Idrees Khaled marked this task complete",
+      "type": "system",
+      "resource_subtype": "marked_complete"
+    }
+  ],
+  "next_page": null
+}
