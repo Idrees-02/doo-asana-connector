@@ -92,6 +92,10 @@ const envSchema = z.object({
   // fine locally and unacceptable once deployed: the endpoint drives a real
   // Asana workspace with the server's own credential.
   MCP_AUTH_TOKEN: optionalString,
+  // Extra hosts the /mcp endpoint will answer to, comma-separated. Normally
+  // unnecessary: the host list is derived from CORS_ORIGIN. Needed when the
+  // endpoint is reached on a name the console is not served from.
+  MCP_ALLOWED_HOSTS: optionalString,
 
   // AI assistant ----------------------------------------------------------
   // Groq inference. Blank => the assistant is disabled and the console hides
@@ -139,6 +143,8 @@ export interface McpConfig {
   readonly httpPort: number;
   /** Bearer token required by the HTTP endpoint, when one is configured. */
   readonly authToken: string | undefined;
+  /** Additional hosts accepted by the HTTP endpoint, beyond the console's own. */
+  readonly allowedHosts: readonly string[];
 }
 
 export interface AiConfig {
@@ -232,6 +238,12 @@ export function buildConfig(raw: NodeJS.ProcessEnv): AppConfig {
       transport: env.MCP_TRANSPORT,
       httpPort: env.MCP_HTTP_PORT,
       authToken: env.MCP_AUTH_TOKEN,
+      allowedHosts:
+        env.MCP_ALLOWED_HOSTS === undefined
+          ? []
+          : env.MCP_ALLOWED_HOSTS.split(',')
+              .map((host) => host.trim())
+              .filter((host) => host.length > 0),
     },
     ai: {
       apiKey: env.GROQ_API_KEY,

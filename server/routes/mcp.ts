@@ -20,8 +20,14 @@ import { createMcpHandler } from '../../mcp/http-transport.js';
 export function registerMcpRoute(app: Express, runtime: Bootstrapped): void {
   const { connector, config, logger } = runtime;
 
+  const hosts = allowedHosts(
+    config.server.corsOrigin,
+    config.server.port,
+    config.mcp.allowedHosts,
+  );
+
   const handler = createMcpHandler(() => createMcpServer(connector), {
-    allowedHosts: allowedHosts(config.server.corsOrigin, config.server.port),
+    allowedHosts: hosts,
     authToken: config.mcp.authToken,
   });
 
@@ -63,9 +69,15 @@ export function registerMcpRoute(app: Express, runtime: Bootstrapped): void {
     handler.handleMcp(req, res);
   });
 
+  /*
+   * The host list is logged because getting it wrong produces a 403 that names
+   * the rejected host and nothing else — which is a confusing way to find out
+   * that the endpoint is reached on a name CORS_ORIGIN does not mention.
+   */
   logger.info('MCP endpoint mounted', {
     path: '/mcp',
     authRequired: config.mcp.authToken !== undefined,
+    allowedHosts: hosts.join(','),
   });
 }
 
@@ -76,7 +88,11 @@ export function registerMcpRoute(app: Express, runtime: Bootstrapped): void {
  * correctly for CORS — so there is no second variable to forget. Localhost is
  * always included so development and tests need no configuration at all.
  */
-function allowedHosts(corsOrigin: string, port: number): string[] {
+function allowedHosts(
+  corsOrigin: string,
+  port: number,
+  extra: readonly string[],
+): string[] {
   const hosts = new Set<string>([
     'localhost',
     '127.0.0.1',
@@ -85,6 +101,8 @@ function allowedHosts(corsOrigin: string, port: number): string[] {
     '[::1]',
     `[::1]:${port}`,
   ]);
+
+  for (const host of extra) hosts.add(host);
 
   for (const origin of corsOrigin.split(',')) {
     const trimmed = origin.trim();
