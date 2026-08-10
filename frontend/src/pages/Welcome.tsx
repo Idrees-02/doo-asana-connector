@@ -1,15 +1,21 @@
 /**
  * The landing page.
  *
- * Rendered outside the console shell, on its own dark canvas, because it is
- * the first thing a reviewer sees and it has one job: say what this is and
- * offer the two ways in — the console for people, the MCP endpoint for agents.
+ * Rendered outside the console shell, on the console's own light palette, and
+ * it has one job: say what this is and offer the two ways in — the console for
+ * people, the MCP endpoint for agents.
  *
- * Every animation here is decorative and disabled under
- * `prefers-reduced-motion`. The page reads identically without any of it.
+ * It is deliberately alive. A full-body robot tracks the pointer with its eyes
+ * and head, a prism of panels turns as the page scrolls, and the robot drifts
+ * with it. Two rules keep that from being noise:
+ *
+ *   1. Motion is driven by CSS custom properties written from one rAF-throttled
+ *      listener each. React never re-renders on pointer or scroll movement.
+ *   2. All of it is decorative and off under `prefers-reduced-motion`, where
+ *      the page reads identically as a still document.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronDown, LayoutDashboard, Network, ShieldCheck, Zap } from 'lucide-react';
 
@@ -20,6 +26,10 @@ export function Welcome() {
   const actions = useActions();
   const total = actions.data?.actions.length ?? 35;
   const live = status.data?.demoMode === false;
+
+  const stage = useRef<HTMLDivElement>(null);
+  usePointer(stage);
+  useScrollProgress(stage);
 
   // Held one frame so the entrance transition has a state to animate from.
   const [entered, setEntered] = useState(false);
@@ -35,37 +45,53 @@ export function Welcome() {
   });
 
   return (
-    <div className="welcome min-h-dvh">
+    <div ref={stage} className="welcome min-h-dvh">
       <Aurora />
+      <Signpost />
 
-      <main className="relative mx-auto flex min-h-dvh max-w-5xl flex-col items-center justify-center px-6 py-20 text-center">
+      <main className="welcome-shift relative mx-auto flex min-h-dvh max-w-5xl flex-col items-center justify-center px-6 py-20 text-center">
         <div className="welcome-rise" style={rise(0)}>
           <Wordmark />
         </div>
 
+        <div className="welcome-rise mt-8" style={rise(80)}>
+          <Robot />
+        </div>
+
         <p
-          className="welcome-rise mt-7 text-xs font-medium tracking-[0.28em] text-white/45 uppercase"
-          style={rise(80)}
+          className="welcome-rise mt-6 text-xs font-medium tracking-[0.28em] uppercase"
+          style={{ ...rise(160), color: 'var(--color-ink-subtle)' }}
         >
           Builders League · Cohort 01
         </p>
 
         <h1
-          className="welcome-rise mt-4 text-4xl font-semibold tracking-tight text-balance text-white sm:text-6xl"
-          style={rise(140)}
+          className="welcome-rise mt-4 text-4xl font-semibold tracking-tight text-balance sm:text-6xl"
+          style={{ ...rise(220), color: 'var(--color-ink)' }}
         >
           The Asana Connector
         </h1>
 
         <p
-          className="welcome-rise mt-5 max-w-xl text-base text-pretty text-white/60 sm:text-lg"
-          style={rise(200)}
+          className="welcome-rise mt-5 max-w-xl text-base text-pretty sm:text-lg"
+          style={{ ...rise(280), color: 'var(--color-ink-muted)' }}
         >
-          One reusable core. <span className="text-white">{total} typed actions</span>, a console
-          for people and an MCP endpoint for agents — both calling exactly the same code.
+          One reusable core.{' '}
+          <span style={{ color: 'var(--color-ink)' }}>{total} typed actions</span> across{' '}
+          <RotatingWord />, a console for people and an MCP endpoint for agents — both calling
+          exactly the same code.
         </p>
 
-        <div className="welcome-rise mt-12 grid w-full gap-4 sm:grid-cols-2" style={rise(280)}>
+        <p
+          className="welcome-rise mt-6 flex items-center gap-2.5 text-sm"
+          style={{ ...rise(320), color: 'var(--color-ink-muted)' }}
+        >
+          <span className="welcome-hairline" aria-hidden="true" />
+          Developed by <strong style={{ color: 'var(--color-accent)' }}>Idrees Khaled</strong>
+          <span className="welcome-hairline" aria-hidden="true" />
+        </p>
+
+        <div className="welcome-rise mt-12 grid w-full gap-4 sm:grid-cols-2" style={rise(380)}>
           <EntryCard
             to="/overview"
             icon={LayoutDashboard}
@@ -83,11 +109,11 @@ export function Welcome() {
         </div>
 
         <ul
-          className="welcome-rise mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-xs text-white/45"
-          style={rise(360)}
+          className="welcome-rise mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-xs"
+          style={{ ...rise(440), color: 'var(--color-ink-subtle)' }}
         >
           <Fact icon={ShieldCheck} label="Approval-gated writes" />
-          <Fact icon={Zap} label="267 automated tests" />
+          <Fact icon={Zap} label="284 automated tests" />
           <Fact
             icon={Network}
             label={live ? 'Live Asana workspace' : 'Demo data'}
@@ -97,56 +123,86 @@ export function Welcome() {
 
         <a
           href="#what-it-is"
-          className="welcome-rise mt-16 flex flex-col items-center gap-1.5 text-[0.7rem] tracking-widest text-white/35 uppercase transition-colors hover:text-white/70"
-          style={rise(440)}
+          className="welcome-rise welcome-scroll mt-14 flex flex-col items-center gap-1.5 text-[0.7rem] tracking-widest uppercase"
+          style={rise(500)}
         >
           What it is
           <ChevronDown className="welcome-bob size-4" aria-hidden="true" />
         </a>
       </main>
 
-      <section id="what-it-is" className="relative border-t border-white/10 px-6 py-24">
+      <section
+        id="what-it-is"
+        className="welcome-shift relative border-t px-6 py-24"
+        style={{ borderColor: 'var(--color-hairline)' }}
+      >
         <div className="mx-auto max-w-5xl">
-          <h2 className="text-center text-2xl font-semibold text-white sm:text-3xl">
+          <h2
+            className="text-center text-2xl font-semibold sm:text-3xl"
+            style={{ color: 'var(--color-ink)' }}
+          >
+            Six domains, {total} actions
+          </h2>
+          <p
+            className="mx-auto mt-3 max-w-2xl text-center text-sm"
+            style={{ color: 'var(--color-ink-muted)' }}
+          >
+            Every one of them typed, validated and safety-classified by the same core. The five the
+            assignment requires are marked.
+          </p>
+
+          <ActionRing />
+        </div>
+      </section>
+
+      <section
+        className="welcome-shift relative border-t px-6 py-24"
+        style={{ borderColor: 'var(--color-hairline)' }}
+      >
+        <div className="mx-auto max-w-5xl">
+          <h2
+            className="text-center text-2xl font-semibold sm:text-3xl"
+            style={{ color: 'var(--color-ink)' }}
+          >
             One core, three surfaces
           </h2>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-white/55">
+          <p
+            className="mx-auto mt-3 max-w-2xl text-center text-sm"
+            style={{ color: 'var(--color-ink-muted)' }}
+          >
             Provider logic lives in one place. Every surface is a thin adapter over it, so a rule
             fixed once is fixed everywhere.
           </p>
 
           <div className="mt-12 grid gap-4 md:grid-cols-3">
             <Surface
+              index={0}
               title="HTTP API"
               body="Serves this console. Owns routing, CORS, rate limiting and the activity log — and holds the credential, so the browser never does."
             />
             <Surface
+              index={1}
               title="MCP adapter"
               body="Registers each connector action as a tool by iteration. A test fails the build if it ever contains an Asana call of its own."
             />
             <Surface
+              index={2}
               title="Assistant"
               body="Plain language over the same actions. Reads run immediately; writes are proposed and wait for a human to approve them."
             />
           </div>
 
           <div className="mt-14 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              to="/overview"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-[#150726] transition-transform hover:-translate-y-0.5"
-            >
+            <Link to="/overview" className="welcome-cta-primary">
               Open the console
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
-            <Link
-              to="/docs"
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:border-white/50 hover:text-white"
-            >
+            <Link to="/docs" className="welcome-cta-ghost">
               Read the documentation
             </Link>
           </div>
 
-          <p className="mt-14 text-center text-xs text-white/30">
+          <p className="mt-14 text-center text-xs" style={{ color: 'var(--color-ink-subtle)' }}>
             Built by Idrees Khaled · Asana Connector v1.0.0
           </p>
         </div>
@@ -156,6 +212,154 @@ export function Welcome() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Motion sources                                                              */
+/* -------------------------------------------------------------------------- */
+
+const prefersReducedMotion = (): boolean =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Publish the pointer as `--px` / `--py`, each in the range -1…1.
+ *
+ * Written to a CSS variable rather than to React state: the robot's eyes track
+ * continuously, and re-rendering a component tree on every pointer event to
+ * move two pupils would be indefensible.
+ */
+function usePointer(ref: React.RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const node = ref.current;
+    if (node === null || prefersReducedMotion()) return;
+
+    let frame = 0;
+    let x = 0;
+    let y = 0;
+
+    const apply = (): void => {
+      frame = 0;
+      node.style.setProperty('--px', x.toFixed(3));
+      node.style.setProperty('--py', y.toFixed(3));
+    };
+
+    const onMove = (event: PointerEvent): void => {
+      x = (event.clientX / window.innerWidth) * 2 - 1;
+      y = (event.clientY / window.innerHeight) * 2 - 1;
+      if (frame === 0) frame = requestAnimationFrame(apply);
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
+      window.removeEventListener('pointermove', onMove);
+    };
+  }, [ref]);
+}
+
+/** Publish scroll position as `--scroll` (0…1 across the page). */
+function useScrollProgress(ref: React.RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const node = ref.current;
+    if (node === null || prefersReducedMotion()) return;
+
+    let frame = 0;
+
+    const apply = (): void => {
+      frame = 0;
+      const max = Math.max(1, document.body.scrollHeight - window.innerHeight);
+      node.style.setProperty('--scroll', (window.scrollY / max).toFixed(4));
+    };
+
+    const onScroll = (): void => {
+      if (frame === 0) frame = requestAnimationFrame(apply);
+    };
+
+    apply();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [ref]);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pieces                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A word that cycles through the connector's domains.
+ *
+ * Width is reserved by the longest entry, so the paragraph never reflows as it
+ * changes.
+ */
+function RotatingWord() {
+  const words = ['tasks', 'projects', 'sections', 'comments', 'tags', 'users'];
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setIndex((i) => (i + 1) % words.length), 1900);
+    return () => clearInterval(id);
+  }, [words.length]);
+
+  return (
+    <span className="welcome-rotator">
+      {/* Sized by the longest word so the sentence around it stays still. */}
+      <span className="welcome-rotator-sizer" aria-hidden="true">
+        sections
+      </span>
+      <span key={index} className="welcome-rotator-word">
+        {words[index]}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The six action domains, on a turning carousel.
+ *
+ * A ring rather than a grid because the point being made is that they are
+ * peers — no domain is the important one, they all reach the same core. It
+ * turns on its own and pauses on hover so a name can actually be read.
+ *
+ * Counts come from the live registry where possible, so the ring cannot
+ * advertise a domain the connector has stopped covering.
+ */
+function ActionRing() {
+  const actions = useActions();
+
+  const groups = [
+    { name: 'Tasks', match: /task|subtask/ },
+    { name: 'Projects', match: /project/ },
+    { name: 'Sections', match: /section/ },
+    { name: 'Comments', match: /comment/ },
+    { name: 'Tags', match: /tag/ },
+    { name: 'Users', match: /user/ },
+  ];
+
+  const counts = groups.map((group) => {
+    const ids = (actions.data?.actions ?? []).filter((action) => group.match.test(action.category));
+    return { ...group, count: ids.length };
+  });
+
+  return (
+    <div className="welcome-ring-stage">
+      <div className="welcome-ring">
+        {counts.map((group, index) => (
+          <div
+            key={group.name}
+            className="welcome-ring-card"
+            style={{ '--i': index } as React.CSSProperties}
+          >
+            <span className="welcome-ring-count">{group.count > 0 ? group.count : '—'}</span>
+            <span className="welcome-ring-name">{group.name}</span>
+          </div>
+        ))}
+      </div>
+      <span className="welcome-ring-floor" aria-hidden="true" />
+    </div>
+  );
+}
 
 /**
  * The DOO wordmark, drawn rather than imported.
@@ -169,8 +373,9 @@ function Wordmark() {
       viewBox="0 0 132 44"
       role="img"
       aria-label="DOO"
-      className="h-11 w-auto text-white"
+      className="h-9 w-auto"
       fill="none"
+      style={{ color: 'var(--color-ink)' }}
     >
       <path
         d="M6 6h14a16 16 0 0 1 0 32H6z"
@@ -181,6 +386,213 @@ function Wordmark() {
       <circle cx="66" cy="22" r="16" stroke="currentColor" strokeWidth="7.5" />
       <circle cx="110" cy="22" r="16" stroke="currentColor" strokeWidth="7.5" />
     </svg>
+  );
+}
+
+/**
+ * A street signpost with three direction signs.
+ *
+ * The pole is fixed and full-height — it never moves. Scrolling turns the signs
+ * around it, which is the one thing a signpost does, and the reason the
+ * metaphor holds: the page moves, the post stays, the signs rotate.
+ *
+ * Desktop only. Beside a centred column there is no room for it at narrow
+ * widths, and a fixed element there would sit on top of the text.
+ */
+function Signpost() {
+  return (
+    <div className="welcome-signpost" aria-hidden="true">
+      <span className="welcome-signpost-pole" />
+      <span className="welcome-signpost-lamp">
+        <span className="welcome-signpost-glow" />
+      </span>
+      <span className="welcome-signpost-base" />
+
+      <div className="welcome-signs">
+        {[
+          { key: 'doo', label: 'DOO' },
+          { key: 'league', label: 'Builders League' },
+          { key: 'builder', label: 'Idrees Khaled' },
+        ].map((sign, index) => (
+          <div key={sign.key} className={`welcome-sign welcome-sign-${index + 1}`}>
+            {/* A bracket, so the plate is bolted to the pole rather than floating. */}
+            <span className="welcome-sign-bracket" />
+            <span className="welcome-sign-plate">{sign.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The assistant, as a machine.
+ *
+ * Full body: it hovers, drifts as the page scrolls, waves, and — the part that
+ * makes it feel awake — turns its head and eyes toward the pointer. Decorative:
+ * `aria-hidden`, and every part of it is still under `prefers-reduced-motion`.
+ */
+function Robot() {
+  return (
+    <div className="welcome-robot" aria-hidden="true">
+      <span className="welcome-robot-halo" />
+
+      <svg viewBox="0 0 180 260" className="welcome-robot-svg" fill="none">
+        <defs>
+          {/* Dark purple, lit from above: an object on the page, not more UI. */}
+          <linearGradient id="robot-body" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--robot-mid)" />
+            <stop offset="100%" stopColor="var(--robot-deep)" />
+          </linearGradient>
+          <linearGradient id="robot-limb" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--robot-mid)" />
+            <stop offset="100%" stopColor="var(--robot-deep)" />
+          </linearGradient>
+          <clipPath id="visor-clip">
+            <rect x="58" y="52" width="64" height="36" rx="15" />
+          </clipPath>
+          <radialGradient id="robot-eye">
+            <stop offset="0%" stopColor="#fff" />
+            <stop offset="45%" stopColor="#c4b5fd" />
+            <stop offset="100%" stopColor="#a78bfa" />
+          </radialGradient>
+        </defs>
+
+        {/* The shadow stays on the ground while the body floats above it. */}
+        <ellipse className="welcome-robot-shadow" cx="90" cy="243" rx="42" ry="7" />
+
+        {/* Data rising into the machine: the connector's traffic, made visible. */}
+        <g className="welcome-robot-data">
+          <rect
+            className="welcome-robot-bit welcome-robot-bit-1"
+            x="18"
+            y="200"
+            width="7"
+            height="7"
+            rx="2"
+          />
+          <rect
+            className="welcome-robot-bit welcome-robot-bit-2"
+            x="48"
+            y="214"
+            width="6"
+            height="6"
+            rx="2"
+          />
+          <rect
+            className="welcome-robot-bit welcome-robot-bit-3"
+            x="126"
+            y="208"
+            width="6"
+            height="6"
+            rx="2"
+          />
+          <rect
+            className="welcome-robot-bit welcome-robot-bit-4"
+            x="152"
+            y="196"
+            width="7"
+            height="7"
+            rx="2"
+          />
+        </g>
+
+        <g className="welcome-robot-float">
+          {/* Legs */}
+          <g className="welcome-robot-leg-l">
+            <rect x="66" y="196" width="16" height="34" rx="7" fill="url(#robot-limb)" />
+            <rect x="60" y="226" width="26" height="11" rx="5" fill="var(--robot-edge)" />
+          </g>
+          <g className="welcome-robot-leg-r">
+            <rect x="98" y="196" width="16" height="34" rx="7" fill="url(#robot-limb)" />
+            <rect x="94" y="226" width="26" height="11" rx="5" fill="var(--robot-edge)" />
+          </g>
+
+          {/* Arms — the left waves, the right keeps a small idle swing. */}
+          <g className="welcome-robot-arm-l">
+            <rect x="40" y="128" width="14" height="52" rx="7" fill="url(#robot-limb)" />
+            <circle cx="47" cy="184" r="9" fill="var(--robot-edge)" />
+          </g>
+          <g className="welcome-robot-arm-r">
+            <rect x="126" y="128" width="14" height="52" rx="7" fill="url(#robot-limb)" />
+            <circle cx="133" cy="184" r="9" fill="var(--robot-edge)" />
+          </g>
+
+          {/* Torso */}
+          <rect
+            x="56"
+            y="122"
+            width="68"
+            height="78"
+            rx="22"
+            fill="url(#robot-body)"
+            stroke="var(--robot-edge)"
+            strokeWidth="2"
+          />
+          <rect x="70" y="140" width="40" height="30" rx="10" fill="#1a0b3d" />
+          <circle className="welcome-robot-core" cx="90" cy="155" r="8" />
+          {/* Status lights: the console's own three-state vocabulary. */}
+          <circle className="welcome-robot-led welcome-robot-led-1" cx="76" cy="186" r="3.5" />
+          <circle className="welcome-robot-led welcome-robot-led-2" cx="90" cy="186" r="3.5" />
+          <circle className="welcome-robot-led welcome-robot-led-3" cx="104" cy="186" r="3.5" />
+
+          {/* Neck */}
+          <rect x="82" y="108" width="16" height="16" rx="5" fill="var(--robot-edge)" />
+
+          {/* Head — tilts toward the pointer. */}
+          <g className="welcome-robot-head">
+            <line
+              x1="90"
+              y1="14"
+              x2="90"
+              y2="30"
+              stroke="var(--robot-edge)"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+            <circle
+              className="welcome-robot-spark"
+              cx="90"
+              cy="11"
+              r="5.5"
+              fill="var(--color-accent)"
+            />
+
+            <rect
+              x="46"
+              y="30"
+              width="88"
+              height="80"
+              rx="24"
+              fill="url(#robot-body)"
+              stroke="var(--robot-edge)"
+              strokeWidth="2"
+            />
+
+            {/* Ears */}
+            <rect x="38" y="56" width="9" height="26" rx="4.5" fill="var(--robot-edge)" />
+            <rect x="133" y="56" width="9" height="26" rx="4.5" fill="var(--robot-edge)" />
+
+            {/* Visor: darker than the shell, so the eyes have something to sit in. */}
+            <rect x="58" y="52" width="64" height="36" rx="15" fill="#1a0b3d" />
+
+            {/* A scan line sweeping the visor — the machine is reading. */}
+            <g clipPath="url(#visor-clip)">
+              <rect className="welcome-robot-scanline" x="58" y="52" width="64" height="4" />
+            </g>
+
+            {/* Eyes: they follow the pointer, and blink. */}
+            <g className="welcome-robot-eyes">
+              <circle cx="75" cy="70" r="7" fill="url(#robot-eye)" />
+              <circle cx="105" cy="70" r="7" fill="url(#robot-eye)" />
+            </g>
+
+            {/* Mouth */}
+            <rect x="80" y="96" width="20" height="4" rx="2" fill="var(--robot-edge)" />
+          </g>
+        </g>
+      </svg>
+    </div>
   );
 }
 
@@ -209,27 +621,32 @@ function EntryCard({
   body: string;
 }) {
   return (
-    <Link
-      to={to}
-      className="welcome-card group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-6 text-left backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.07]"
-    >
+    <Link to={to} className="welcome-card group">
       <span className="welcome-card-glow" aria-hidden="true" />
 
-      <span className="relative flex size-10 items-center justify-center rounded-xl bg-white/10 text-white transition-colors group-hover:bg-white group-hover:text-[#150726]">
+      <span className="welcome-card-icon relative">
         <Icon className="size-5" aria-hidden="true" />
       </span>
 
-      <p className="relative mt-5 text-[0.7rem] tracking-[0.18em] text-white/40 uppercase">
+      <p
+        className="relative mt-5 text-[0.7rem] tracking-[0.18em] uppercase"
+        style={{ color: 'var(--color-ink-subtle)' }}
+      >
         {eyebrow}
       </p>
-      <h2 className="relative mt-1.5 flex items-center gap-2 text-lg font-semibold text-white">
+      <h2
+        className="relative mt-1.5 flex items-center gap-2 text-lg font-semibold"
+        style={{ color: 'var(--color-ink)' }}
+      >
         {title}
         <ArrowRight
           className="size-4 opacity-0 transition-all duration-300 group-hover:translate-x-1 group-hover:opacity-100"
           aria-hidden="true"
         />
       </h2>
-      <p className="relative mt-2 text-sm text-white/55">{body}</p>
+      <p className="relative mt-2 text-sm" style={{ color: 'var(--color-ink-muted)' }}>
+        {body}
+      </p>
     </Link>
   );
 }
@@ -249,7 +666,10 @@ function Fact({
         <Icon className="size-3.5" aria-hidden="true" />
       ) : (
         <span
-          className={`size-1.5 rounded-full ${tone === 'live' ? 'bg-emerald-400' : 'bg-amber-400'}`}
+          className="welcome-pulse size-1.5 rounded-full"
+          style={{
+            background: tone === 'live' ? 'var(--color-success)' : 'var(--color-warning)',
+          }}
           aria-hidden="true"
         />
       )}
@@ -258,11 +678,48 @@ function Fact({
   );
 }
 
-function Surface({ title, body }: { title: string; body: string }) {
+/** A card that rises into place the first time it is scrolled into view. */
+function Surface({ index, title, body }: { index: number; title: string; body: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (node === null) return;
+    if (prefersReducedMotion()) {
+      setShown(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // One-way: a card that has arrived stays arrived, so scrolling back up
+        // does not replay the animation.
+        if (entry?.isIntersecting === true) {
+          setShown(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.25 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
-      <p className="mt-2 text-sm text-white/55">{body}</p>
+    <div
+      ref={ref}
+      className="welcome-surface welcome-reveal"
+      data-shown={shown}
+      style={{ transitionDelay: `${index * 110}ms` }}
+    >
+      <h3 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+        {title}
+      </h3>
+      <p className="mt-2 text-sm" style={{ color: 'var(--color-ink-muted)' }}>
+        {body}
+      </p>
     </div>
   );
 }

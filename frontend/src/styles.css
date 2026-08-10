@@ -270,27 +270,49 @@
 
 /* ==========================================================================
    Landing page
-   
-   Scoped under .welcome so none of this leaks into the console, which has a
-   deliberately quiet visual language. The palette is DOO's: near-black plum
-   with the connector's purple, lit from two moving sources.
+
+   Scoped under .welcome so none of this leaks into the console. It restates the
+   console's LIGHT token set so the landing looks the same in either theme — the
+   palette is the dashboard's, nothing here is invented.
+
+   Motion is driven by two custom properties the page writes from rAF-throttled
+   listeners: --px/--py (pointer, -1…1) and --scroll (0…1). CSS reads them; no
+   component re-renders while you move or scroll.
    ========================================================================== */
 
 .welcome {
-  /*
-   * The console's own purple ramp, not a second palette. --color-accent and
-   * --color-accent-strong are the same tokens every button and link uses; the
-   * ink is the darkest step of that ramp, matching the DOO mark's background.
-   */
-  --welcome-ink: #150726;
-  --welcome-accent: #7c3aed; /* --color-accent, pinned: the landing is dark-only */
-  --welcome-accent-deep: #6b21a8; /* --color-accent-strong */
+  --color-canvas: #faf8fc;
+  --color-surface: #fff;
+  --color-surface-2: #f7f5fa;
+  --color-surface-3: #efeaf6;
+  --color-hairline: #e7e2ef;
+  --color-hairline-strong: #d6cee4;
+  --color-ink: #0f172a;
+  --color-ink-muted: #64748b;
+  --color-ink-subtle: #475569;
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-strong: #6b21a8;
+  --color-accent-muted: #f3e8ff;
+  --color-success: #047857;
+  --color-warning: #b45309;
+
+  /* The robot's own scale: dark purple, so it reads as an object on the page
+     rather than as more interface. */
+  --robot-deep: #2e1065;
+  --robot-mid: #4c1d95;
+  --robot-edge: #6b21a8;
+
+  /* Defaults, so every transform below is valid before the first event. */
+  --px: 0;
+  --py: 0;
+  --scroll: 0;
 
   background:
-    radial-gradient(120% 90% at 50% -10%, #2a1148 0%, transparent 60%), var(--welcome-ink);
-  color: #fff;
-  /* The landing owns its own theme in both light and dark mode. */
-  color-scheme: dark;
+    radial-gradient(120% 90% at 50% -10%, var(--color-accent-muted) 0%, transparent 55%),
+    var(--color-canvas);
+  color: var(--color-ink);
+  color-scheme: light;
 }
 
 .welcome-rise {
@@ -299,12 +321,15 @@
     transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* --- Atmosphere ---------------------------------------------------------- */
+
 .welcome-orb {
   position: absolute;
   border-radius: 9999px;
   /* Large, soft and low-contrast: atmosphere, never a shape the eye lands on. */
-  filter: blur(90px);
-  opacity: 0.5;
+  filter: blur(100px);
+  /* Far lighter than on a dark canvas, where the same value would read as haze. */
+  opacity: 0.22;
 }
 
 .welcome-orb-a {
@@ -312,7 +337,7 @@
   left: -8rem;
   width: 38rem;
   height: 38rem;
-  background: radial-gradient(circle, var(--welcome-accent) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--color-accent) 0%, transparent 70%);
   animation: welcome-drift-a 22s ease-in-out infinite alternate;
 }
 
@@ -321,26 +346,461 @@
   bottom: -16rem;
   width: 34rem;
   height: 34rem;
-  background: radial-gradient(circle, var(--welcome-accent-deep) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--color-accent-strong) 0%, transparent 70%);
   animation: welcome-drift-b 26s ease-in-out infinite alternate;
 }
 
-/* A faint rule grid, masked out at the edges so it never draws a hard border. */
+/* A faint rule grid, masked at the edges so it never draws a hard border. */
 .welcome-grid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    linear-gradient(rgb(15 23 42 / 4%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(15 23 42 / 4%) 1px, transparent 1px);
   background-size: 72px 72px;
   mask-image: radial-gradient(90% 70% at 50% 30%, #000 0%, transparent 75%);
+}
+
+/* --- The signpost --------------------------------------------------------
+   A street pole with three direction signs. The pole is fixed and full-height:
+   it never moves. Scrolling turns the signs around it, which is the one thing
+   a signpost can do and the reason the metaphor works.
+   Hidden below 1280px — beside a centred column there is no room for it, and a
+   fixed element would sit on top of the text.
+   ------------------------------------------------------------------------ */
+
+.welcome-signpost {
+  position: fixed;
+  top: 0;
+  right: max(2rem, calc((100vw - 64rem) / 4));
+  z-index: 0;
+  display: none;
+  width: 12rem;
+  height: 100dvh;
+  perspective: 1100px;
+  pointer-events: none;
+}
+
+@media (min-width: 1280px) {
+  .welcome-signpost {
+    display: block;
+  }
+}
+
+.welcome-signpost-pole {
+  position: absolute;
+  top: 4.5rem;
+  bottom: 2.5rem;
+  left: 50%;
+  width: 20px;
+  margin-left: -10px;
+  border-radius: 4px;
+  /* Lit from the left, like everything else on the page, with a highlight
+     down one edge so it reads as a cylinder rather than a bar. */
+  background: linear-gradient(
+    90deg,
+    #b9aed0 0%,
+    var(--color-surface-3) 30%,
+    #fff 46%,
+    var(--color-surface-3) 62%,
+    #9c8fb8 100%
+  );
+  box-shadow: 0 0 0 1px var(--color-hairline-strong);
+}
+
+/* The lamp head: this is a street lamp, so it carries a light. */
+.welcome-signpost-lamp {
+  position: absolute;
+  top: 2.9rem;
+  left: 50%;
+  display: block;
+  width: 54px;
+  height: 26px;
+  margin-left: -27px;
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: 14px 14px 6px 6px;
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-surface-3) 100%);
+  box-shadow: 0 6px 14px rgb(46 16 101 / 12%);
+}
+
+/* The pool of light it casts, breathing slowly. */
+.welcome-signpost-glow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 190px;
+  height: 320px;
+  margin-left: -95px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-accent) 26%, transparent) 0%,
+    transparent 72%
+  );
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+  animation: welcome-lamp 5s ease-in-out infinite;
+}
+
+.welcome-signpost-base {
+  position: absolute;
+  bottom: 1.6rem;
+  left: 50%;
+  width: 64px;
+  height: 16px;
+  margin-left: -32px;
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(180deg, var(--color-surface-3), var(--color-hairline-strong));
+}
+
+.welcome-signs {
+  position: absolute;
+  inset: 0;
+  left: 50%;
+  transform-style: preserve-3d;
+  /*
+   * One and a half turns across the page — enough that each sign faces the
+   * reader at least once, slow enough to stay legible. The long ease is what
+   * makes it feel like a heavy object being turned rather than a value being
+   * assigned: the smoothing lives here, not in a scroll handler.
+   */
+  transform: rotateY(calc(var(--scroll) * 540deg));
+  transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.welcome-sign {
+  position: absolute;
+  left: 0;
+  transform-style: preserve-3d;
+}
+
+/* Fanned 120° apart so only one faces the reader at a time. */
+.welcome-sign-1 {
+  top: 30%;
+  transform: rotateY(0deg);
+}
+
+.welcome-sign-2 {
+  top: 46%;
+  transform: rotateY(120deg);
+}
+
+.welcome-sign-3 {
+  top: 62%;
+  transform: rotateY(240deg);
+}
+
+.welcome-sign {
+  display: flex;
+  align-items: center;
+}
+
+/* The bracket bolting the plate to the pole. */
+.welcome-sign-bracket {
+  width: 16px;
+  height: 6px;
+  backface-visibility: hidden;
+  border-radius: 2px;
+  background: var(--color-hairline-strong);
+}
+
+.welcome-sign-plate {
+  display: block;
+  padding: 0.7rem 1.7rem 0.7rem 1.1rem;
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+  box-shadow: 0 8px 20px rgb(46 16 101 / 12%);
+  color: var(--color-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  /* Pointed like a direction sign. */
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%);
+  /* A sign turned away shows nothing rather than mirrored text, which reads as
+     a rendering bug rather than as the back of a plate. */
+  backface-visibility: hidden;
+}
+
+.welcome-sign-1 .welcome-sign-plate {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* Room for the post: only where the post exists. */
+@media (min-width: 1280px) {
+  .welcome-shift {
+    transform: translateX(-6rem);
+  }
+}
+
+/* --- The action ring ------------------------------------------------------ */
+
+.welcome-ring-stage {
+  position: relative;
+  height: 20rem;
+  margin-top: 3rem;
+  perspective: 1200px;
+}
+
+.welcome-ring {
+  position: absolute;
+  top: 3rem;
+  left: 50%;
+  width: 11rem;
+  height: 7rem;
+  margin-left: -5.5rem;
+  transform-style: preserve-3d;
+  animation: welcome-ring-spin 30s linear infinite;
+}
+
+/* Pausing on hover is the whole reason the labels are readable at all. */
+.welcome-ring-stage:hover .welcome-ring {
+  animation-play-state: paused;
+}
+
+.welcome-ring-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--color-hairline);
+  border-radius: 1rem;
+  background: var(--color-surface);
+  box-shadow: 0 10px 30px rgb(46 16 101 / 10%);
+  /* Six seats, 60° apart, pushed out to the ring's radius. */
+  transform: rotateY(calc(var(--i) * 60deg)) translateZ(11.5rem);
+  backface-visibility: hidden;
+}
+
+.welcome-ring-count {
+  color: var(--color-accent);
+  font-size: 1.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.welcome-ring-name {
+  color: var(--color-ink);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* A soft floor so the ring sits in space rather than hovering in a void. */
+.welcome-ring-floor {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 50%;
+  width: 30rem;
+  height: 3rem;
+  margin-left: -15rem;
+  background: radial-gradient(ellipse, rgb(46 16 101 / 10%) 0%, transparent 70%);
+}
+
+/* --- The robot ----------------------------------------------------------- */
+
+.welcome-robot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 15rem;
+  height: 17rem;
+}
+
+.welcome-robot-svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 16px 26px rgb(46 16 101 / 22%));
+  /* Drifts sideways as the page scrolls: the machine walks with the reader. */
+  transform: translateX(calc(var(--scroll) * 120px)) rotate(calc(var(--scroll) * 6deg));
+  transition: transform 150ms linear;
+}
+
+.welcome-robot-halo {
+  position: absolute;
+  width: 12rem;
+  height: 12rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, var(--color-accent) 0%, transparent 68%);
+  opacity: 0.18;
+  animation: welcome-breathe 4s ease-in-out infinite;
+}
+
+/* Hovering, not walking: the whole machine drifts on a long slow cycle. */
+.welcome-robot-float {
+  animation: welcome-float 3.6s ease-in-out infinite;
+  transform-origin: 90px 130px;
+}
+
+/* The head leans toward the pointer; the eyes go further, as eyes do. */
+.welcome-robot-head {
+  transform: rotate(calc(var(--px) * 5deg)) translate(calc(var(--px) * 5px), calc(var(--py) * 3px));
+  transform-origin: 90px 110px;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.welcome-robot-eyes {
+  transform: translate(calc(var(--px) * 5px), calc(var(--py) * 3px));
+  transform-origin: 90px 70px;
+  transition: transform 140ms ease-out;
+  animation: welcome-blink 4.5s ease-in-out infinite;
+}
+
+.welcome-robot-shadow {
+  fill: var(--robot-deep);
+  opacity: 0.14;
+  animation: welcome-shadow 3.6s ease-in-out infinite;
+}
+
+/* Arms: the left waves, the right keeps a smaller idle swing. */
+.welcome-robot-arm-l {
+  transform-origin: 47px 132px;
+  animation: welcome-wave 2.6s ease-in-out infinite;
+}
+
+.welcome-robot-arm-r {
+  transform-origin: 133px 132px;
+  animation: welcome-idle-arm 3.4s ease-in-out infinite;
+}
+
+.welcome-robot-leg-l {
+  transform-origin: 74px 200px;
+  animation: welcome-idle-arm 3.4s ease-in-out infinite reverse;
+}
+
+.welcome-robot-leg-r {
+  transform-origin: 106px 200px;
+  animation: welcome-idle-arm 3.4s ease-in-out infinite;
+}
+
+/* A line sweeping the visor, clipped to it. */
+.welcome-robot-scanline {
+  fill: var(--color-accent);
+  opacity: 0.55;
+  animation: welcome-scanline 2.2s linear infinite;
+}
+
+.welcome-robot-core {
+  fill: var(--color-accent);
+  animation: welcome-spark 1.8s ease-in-out infinite;
+  transform-origin: 90px 155px;
+}
+
+.welcome-robot-spark {
+  animation: welcome-spark 2s ease-in-out infinite;
+  transform-origin: 90px 11px;
+}
+
+/* Bright variants: these sit on the robot's dark shell, not on the page. */
+.welcome-robot-led {
+  animation: welcome-led 1.8s ease-in-out infinite;
+}
+
+.welcome-robot-led-1 {
+  fill: #34d399;
+}
+
+.welcome-robot-led-2 {
+  fill: #c4b5fd;
+  animation-delay: 0.3s;
+}
+
+.welcome-robot-led-3 {
+  fill: #fbbf24;
+  animation-delay: 0.6s;
+}
+
+/* Packets of data rising into the machine. */
+.welcome-robot-bit {
+  fill: var(--color-accent);
+  opacity: 0;
+  animation: welcome-bit 3.2s ease-in infinite;
+}
+
+.welcome-robot-bit-2 {
+  fill: var(--color-accent-strong);
+  animation-delay: 0.8s;
+}
+
+.welcome-robot-bit-3 {
+  animation-delay: 1.6s;
+}
+
+.welcome-robot-bit-4 {
+  fill: var(--color-accent-strong);
+  animation-delay: 2.4s;
+}
+
+/* --- Components ---------------------------------------------------------- */
+
+/* The cycling domain word. Inline-grid so both layers share one cell. */
+.welcome-rotator {
+  display: inline-grid;
+  text-align: left;
+  vertical-align: bottom;
+}
+
+.welcome-rotator-sizer,
+.welcome-rotator-word {
+  grid-area: 1 / 1;
+}
+
+.welcome-rotator-sizer {
+  visibility: hidden;
+}
+
+.welcome-rotator-word {
+  animation: welcome-word 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.welcome-hairline {
+  display: block;
+  width: 1.75rem;
+  height: 1px;
+  background: var(--color-hairline-strong);
+}
+
+.welcome-card {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem;
+  border: 1px solid var(--color-hairline);
+  border-radius: 1rem;
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
+  text-align: left;
+  transition:
+    transform 300ms ease,
+    border-color 300ms ease,
+    box-shadow 300ms ease;
+}
+
+.welcome-card:hover,
+.welcome-card:focus-visible {
+  border-color: var(--color-accent);
+  box-shadow: 0 12px 28px rgb(124 58 237 / 12%);
+  transform: translateY(-4px);
 }
 
 .welcome-card-glow {
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  background: radial-gradient(60% 60% at 50% 0%, rgb(167 139 250 / 28%), transparent 70%);
+  background: radial-gradient(
+    60% 60% at 50% 0%,
+    color-mix(in srgb, var(--color-accent) 30%, transparent),
+    transparent 70%
+  );
   opacity: 0;
   transition: opacity 300ms ease;
 }
@@ -350,9 +810,100 @@
   opacity: 1;
 }
 
+.welcome-card-icon {
+  display: flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: var(--color-accent-muted);
+  color: var(--color-accent);
+  transition:
+    background 300ms ease,
+    color 300ms ease;
+}
+
+.welcome-card:hover .welcome-card-icon {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.welcome-surface {
+  padding: 1.5rem;
+  border: 1px solid var(--color-hairline);
+  border-radius: 1rem;
+  background: var(--color-surface);
+}
+
+/* Arrives once, when first scrolled into view. */
+.welcome-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.welcome-reveal[data-shown='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+.welcome-scroll {
+  color: var(--color-ink-subtle);
+  transition: color 200ms ease;
+}
+
+.welcome-scroll:hover {
+  color: var(--color-accent);
+}
+
+.welcome-cta-primary,
+.welcome-cta-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition:
+    transform 200ms ease,
+    background 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+}
+
+.welcome-cta-primary {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.welcome-cta-primary:hover {
+  background: var(--color-accent-hover);
+  transform: translateY(-2px);
+}
+
+.welcome-cta-ghost {
+  border: 1px solid var(--color-hairline-strong);
+  color: var(--color-ink-muted);
+}
+
+.welcome-cta-ghost:hover {
+  border-color: var(--color-accent);
+  color: var(--color-ink);
+}
+
 .welcome-bob {
   animation: welcome-bob 2.4s ease-in-out infinite;
 }
+
+.welcome-pulse {
+  animation: welcome-breathe 2.4s ease-in-out infinite;
+}
+
+/* --- Keyframes ----------------------------------------------------------- */
 
 @keyframes welcome-drift-a {
   to {
@@ -363,6 +914,164 @@
 @keyframes welcome-drift-b {
   to {
     transform: translate3d(-5rem, -3rem, 0) scale(1.08);
+  }
+}
+
+@keyframes welcome-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  30% {
+    transform: translateY(-14px) rotate(-3deg);
+  }
+  65% {
+    transform: translateY(7px) rotate(3deg);
+  }
+}
+
+/* The shadow shrinks as the body rises: the cue that sells the hover. */
+@keyframes welcome-shadow {
+  0%,
+  100% {
+    opacity: 0.14;
+    transform: scaleX(1);
+  }
+  30% {
+    opacity: 0.07;
+    transform: scaleX(0.8);
+  }
+}
+
+@keyframes welcome-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes welcome-wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-26deg);
+  }
+  40% {
+    transform: rotate(-8deg);
+  }
+  60% {
+    transform: rotate(-24deg);
+  }
+}
+
+@keyframes welcome-idle-arm {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+
+@keyframes welcome-scanline {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  15% {
+    opacity: 0.55;
+  }
+  85% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+}
+
+@keyframes welcome-bit {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 0.9;
+  }
+  70% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-70px) scale(1);
+  }
+}
+
+@keyframes welcome-word {
+  from {
+    opacity: 0;
+    transform: translateY(0.4em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes welcome-spark {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes welcome-led {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes welcome-breathe {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes welcome-lamp {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes welcome-ring-spin {
+  to {
+    transform: rotateY(360deg);
   }
 }
 
@@ -377,17 +1086,45 @@
 }
 
 /*
- * Motion here is decoration only: with it disabled the landing is a static
- * page that says exactly the same thing.
+ * Motion here is decoration only: with it disabled the landing is a still page
+ * that says exactly the same thing, robot and signpost included.
  */
 @media (prefers-reduced-motion: reduce) {
   .welcome-orb,
-  .welcome-bob {
+  .welcome-bob,
+  .welcome-pulse,
+  .welcome-robot-halo,
+  .welcome-robot-float,
+  .welcome-robot-shadow,
+  .welcome-robot-eyes,
+  .welcome-robot-spark,
+  .welcome-robot-core,
+  .welcome-robot-led,
+  .welcome-robot-arm-l,
+  .welcome-robot-arm-r,
+  .welcome-robot-leg-l,
+  .welcome-robot-leg-r,
+  .welcome-robot-scanline,
+  .welcome-robot-bit,
+  .welcome-rotator-word,
+  .welcome-signpost-glow,
+  .welcome-ring {
     animation: none;
   }
 
-  .welcome-rise {
+  .welcome-robot-svg,
+  .welcome-robot-head,
+  .welcome-signs {
+    transform: none;
+  }
+
+  .welcome-rise,
+  .welcome-reveal {
     opacity: 1 !important;
     transform: none !important;
+  }
+
+  .welcome-robot-bit {
+    opacity: 0.5;
   }
 }
