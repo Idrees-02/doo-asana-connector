@@ -50,8 +50,8 @@ export function Welcome() {
       <Signpost />
 
       <main className="welcome-shift relative mx-auto flex min-h-dvh max-w-5xl flex-col items-center justify-center px-6 py-20 text-center">
-        <div className="welcome-rise" style={rise(0)}>
-          <Wordmark />
+        <div className="welcome-rise" style={{ ...rise(0), color: 'var(--color-accent)' }}>
+          <Wordmark className="h-11 w-auto" />
         </div>
 
         <div className="welcome-rise mt-8" style={rise(80)}>
@@ -362,29 +362,32 @@ function ActionRing() {
 }
 
 /**
- * The DOO wordmark, drawn rather than imported.
+ * The DOO wordmark.
  *
- * Two rings and a D, which is the mark's whole idea: an SVG stays crisp at any
- * size and inherits the page's colour, where a bitmap would do neither.
+ * Redrawn from the brand image as vector rather than embedded as a bitmap: it
+ * arrives with no background to strip, stays sharp at any size, and takes its
+ * colour from the page instead of carrying a baked-in one.
+ *
+ * Three overlapping rings, unioned, with their counters punched out by a mask —
+ * the overlaps have to merge into one solid shape, which is what the mask
+ * guarantees and three stroked circles would not.
  */
-function Wordmark() {
+function Wordmark({ className = 'h-9 w-auto' }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 132 44"
-      role="img"
-      aria-label="DOO"
-      className="h-9 w-auto"
-      fill="none"
-      style={{ color: 'var(--color-ink)' }}
-    >
-      <path
-        d="M6 6h14a16 16 0 0 1 0 32H6z"
-        stroke="currentColor"
-        strokeWidth="7.5"
-        strokeLinejoin="round"
-      />
-      <circle cx="66" cy="22" r="16" stroke="currentColor" strokeWidth="7.5" />
-      <circle cx="110" cy="22" r="16" stroke="currentColor" strokeWidth="7.5" />
+    <svg viewBox="0 0 580 226" role="img" aria-label="DOO" className={className}>
+      <mask id="doo-counters">
+        {/* White keeps, black cuts. */}
+        <circle cx="113" cy="113" r="113" fill="#fff" />
+        <circle cx="290" cy="113" r="113" fill="#fff" />
+        <circle cx="467" cy="113" r="113" fill="#fff" />
+
+        {/* The D's counter: flat on the left, round on the right. */}
+        <path d="M51 51H113a62 62 0 0 1 0 124H51z" fill="#000" />
+        <circle cx="290" cy="113" r="62" fill="#000" />
+        <circle cx="467" cy="113" r="62" fill="#000" />
+      </mask>
+
+      <rect width="580" height="226" fill="currentColor" mask="url(#doo-counters)" />
     </svg>
   );
 }

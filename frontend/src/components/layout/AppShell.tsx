@@ -228,13 +228,33 @@ function Brand() {
   );
 }
 
-/** Three dots, echoing Asana's identity without reproducing their logo. */
+/**
+ * The DOO mark: three rings, the first with a D-shaped counter.
+ *
+ * Vector rather than a bitmap, so it has no background to strip, stays sharp at
+ * any size, and takes the accent colour from the theme. The rings overlap, so
+ * the counters are punched with a mask — three stroked circles would leave
+ * seams where they cross.
+ */
 function AsanaMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={cn('h-6 w-6 shrink-0', className)} aria-hidden="true">
-      <circle cx="16" cy="9" r="5" fill="var(--color-accent)" />
-      <circle cx="8" cy="22" r="5" fill="var(--color-accent)" />
-      <circle cx="24" cy="22" r="5" fill="var(--color-accent)" />
+    <svg
+      viewBox="0 0 580 226"
+      className={cn('h-5 w-auto shrink-0', className)}
+      role="img"
+      aria-label="DOO"
+    >
+      <mask id="doo-mark-counters">
+        {/* White keeps, black cuts. */}
+        <circle cx="113" cy="113" r="113" fill="#fff" />
+        <circle cx="290" cy="113" r="113" fill="#fff" />
+        <circle cx="467" cy="113" r="113" fill="#fff" />
+        <path d="M51 51H113a62 62 0 0 1 0 124H51z" fill="#000" />
+        <circle cx="290" cy="113" r="62" fill="#000" />
+        <circle cx="467" cy="113" r="62" fill="#000" />
+      </mask>
+
+      <rect width="580" height="226" fill="var(--color-accent)" mask="url(#doo-mark-counters)" />
     </svg>
   );
 }
