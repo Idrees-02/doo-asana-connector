@@ -46,17 +46,13 @@ const ASSISTANT_ACTION_IDS: readonly string[] = [
   'asana.list_project_tasks',
   'asana.get_task',
   'asana.search_tasks',
-  'asana.list_project_sections',
   'asana.list_comments',
-  'asana.list_users',
   'asana.get_current_user',
   // Writes — proposed to the user, never executed by the model.
   'asana.create_task',
   'asana.update_task',
   'asana.add_comment',
   'asana.complete_task',
-  'asana.assign_task',
-  'asana.set_task_due_date',
 ];
 
 /** Transcript turns accepted from the client, oldest dropped beyond this. */
@@ -175,7 +171,10 @@ export function registerAiRoutes(app: Express, runtime: Bootstrapped): void {
       risk: string;
     } | null;
   }> {
-    const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt() }, ...history];
+    // Only the recent turns: older ones cost tokens against a per-minute
+    // budget without changing what the assistant is being asked to do now.
+    const recent = history.slice(-8);
+    const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt() }, ...recent];
 
     const steps: Array<{ actionId: string; ok: boolean; summary: string }> = [];
 
@@ -249,9 +248,12 @@ export function registerAiRoutes(app: Express, runtime: Bootstrapped): void {
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
-          // Bounded: a large project list would otherwise crowd out the
-          // conversation and cost tokens for data the model cannot use.
-          content: JSON.stringify(execution.ok ? execution.data : execution.error).slice(0, 6000),
+          /*
+           * Tightly bounded. The provider allows 12,000 tokens per minute, and
+           * a full project dump is thousands of them spent on data the model
+           * will summarise in one line anyway.
+           */
+          content: JSON.stringify(execution.ok ? execution.data : execution.error).slice(0, 1600),
         });
       }
     }

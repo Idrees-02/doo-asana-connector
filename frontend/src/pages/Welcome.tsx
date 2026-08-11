@@ -29,6 +29,11 @@ const Signpost3D = lazy(() =>
   import('@/components/Signpost3D').then((m) => ({ default: m.Signpost3D })),
 );
 
+// Only fetched when someone actually clicks the robot.
+const AssistantPopup = lazy(() =>
+  import('@/components/assistant/AssistantPopup').then((m) => ({ default: m.AssistantPopup })),
+);
+
 export function Welcome() {
   const status = useStatus();
   const actions = useActions();
@@ -38,6 +43,8 @@ export function Welcome() {
   const stage = useRef<HTMLDivElement>(null);
   usePointer(stage);
   useScrollProgress(stage);
+
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Held one frame so the entrance transition has a state to animate from.
   const [entered, setEntered] = useState(false);
@@ -68,7 +75,7 @@ export function Welcome() {
         </div>
 
         <div className="welcome-rise mt-8" style={rise(80)}>
-          <Robot />
+          <Robot onOpen={() => setChatOpen(true)} />
         </div>
 
         <p
@@ -154,7 +161,7 @@ export function Welcome() {
             className="text-center text-2xl font-semibold sm:text-3xl"
             style={{ color: 'var(--color-ink)' }}
           >
-            Six domains, {total} actions
+            Six domains, {total} connectors
           </h2>
           <p
             className="mx-auto mt-3 max-w-2xl text-center text-sm"
@@ -220,6 +227,12 @@ export function Welcome() {
           </p>
         </div>
       </section>
+
+      {chatOpen && (
+        <Suspense fallback={null}>
+          <AssistantPopup onClose={() => setChatOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }
@@ -412,12 +425,18 @@ function Wordmark({ className = 'h-9 w-auto' }: { className?: string }) {
  * makes it feel awake — turns its head and eyes toward the pointer. Decorative:
  * `aria-hidden`, and every part of it is still under `prefers-reduced-motion`.
  */
-function Robot() {
+function Robot({ onOpen }: { onOpen: () => void }) {
   return (
-    <div className="welcome-robot" aria-hidden="true">
-      <span className="welcome-robot-halo" />
+    <button type="button" className="welcome-robot" onClick={onOpen}>
+      {/* The machine is the affordance, so it says what it does on hover and
+          to a screen reader — the drawing itself stays decorative. */}
+      <span className="sr-only">Open the assistant</span>
+      <span className="welcome-robot-hint" aria-hidden="true">
+        Ask me anything
+      </span>
+      <span className="welcome-robot-halo" aria-hidden="true" />
 
-      <svg viewBox="0 0 180 260" className="welcome-robot-svg" fill="none">
+      <svg viewBox="0 0 180 260" className="welcome-robot-svg" fill="none" aria-hidden="true">
         <defs>
           {/* Dark purple, lit from above: an object on the page, not more UI. */}
           <linearGradient id="robot-body" x1="0" y1="0" x2="0" y2="1">
@@ -572,7 +591,7 @@ function Robot() {
           </g>
         </g>
       </svg>
-    </div>
+    </button>
   );
 }
 

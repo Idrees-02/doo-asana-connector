@@ -326,10 +326,15 @@
 .welcome-orb {
   position: absolute;
   border-radius: 9999px;
-  /* Large, soft and low-contrast: atmosphere, never a shape the eye lands on. */
-  filter: blur(100px);
-  /* Far lighter than on a dark canvas, where the same value would read as haze. */
+  /*
+   * Large, soft and low-contrast: atmosphere, never a shape the eye lands on.
+   * The blur radius is the single most expensive value on this page — a 100px
+   * blur on a 38rem element is recomposited every frame it moves, so it is kept
+   * as low as the effect tolerates and promoted to its own layer.
+   */
+  filter: blur(64px);
   opacity: 0.22;
+  will-change: transform;
 }
 
 .welcome-orb-a {
@@ -359,6 +364,8 @@
     linear-gradient(90deg, rgb(15 23 42 / 4%) 1px, transparent 1px);
   background-size: 72px 72px;
   mask-image: radial-gradient(90% 70% at 50% 30%, #000 0%, transparent 75%);
+  /* Static, but sharing a layer with moving siblings would repaint it. */
+  transform: translateZ(0);
 }
 
 /* --- The signpost --------------------------------------------------------
@@ -371,10 +378,13 @@
 .welcome-signpost {
   position: fixed;
   top: 0;
-  right: max(0.5rem, calc((100vw - 70rem) / 8));
+  /* Full height, because the post stands on the bottom of it: the base is
+     planted on the frame's floor and the column runs up from there. */
+  top: 0;
+  right: max(0.5rem, calc((100vw - 72rem) / 9));
   z-index: 0;
   display: none;
-  width: 26rem;
+  width: 34rem;
   height: 100dvh;
   pointer-events: none;
 }
@@ -400,7 +410,7 @@
 @media (min-width: 1280px) {
   .welcome-shift {
     /* Clears the post's column, signs included, at 1280px and above. */
-    transform: translateX(-13rem);
+    transform: translateX(-15rem);
   }
 }
 
@@ -478,9 +488,42 @@
 .welcome-robot {
   position: relative;
   display: grid;
-  place-items: center;
   width: 15rem;
   height: 17rem;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  place-items: center;
+}
+
+/* The invitation, shown on hover and focus — the drawing alone does not say
+   that it is clickable. */
+.welcome-robot-hint {
+  position: absolute;
+  bottom: 0.25rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--color-hairline);
+  border-radius: 9999px;
+  background: var(--color-surface);
+  box-shadow: 0 6px 16px rgb(46 16 101 / 12%);
+  color: var(--color-accent);
+  font-size: 0.7rem;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.welcome-robot:hover .welcome-robot-hint,
+.welcome-robot:focus-visible .welcome-robot-hint {
+  opacity: 1;
+  transform: none;
+}
+
+.welcome-robot:hover .welcome-robot-svg {
+  transform: scale(1.03);
 }
 
 .welcome-robot-svg {
@@ -488,9 +531,7 @@
   width: 100%;
   height: 100%;
   filter: drop-shadow(0 16px 26px rgb(46 16 101 / 22%));
-  /* Drifts sideways as the page scrolls: the machine walks with the reader. */
-  transform: translateX(calc(var(--scroll) * 120px)) rotate(calc(var(--scroll) * 6deg));
-  transition: transform 150ms linear;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .welcome-robot-halo {
@@ -772,7 +813,85 @@
   animation: welcome-breathe 2.4s ease-in-out infinite;
 }
 
+/* --- The assistant pop-up ------------------------------------------------- */
+
+.assistant-popup-backdrop {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  padding: 1rem;
+  background: rgb(15 23 42 / 45%);
+  inset: 0;
+  place-items: center;
+  animation: welcome-fade 180ms ease-out;
+}
+
+.assistant-popup {
+  display: flex;
+  width: min(38rem, 100%);
+  height: min(34rem, 88dvh);
+  flex-direction: column;
+  border: 1px solid var(--color-hairline);
+  border-radius: 1rem;
+  background: var(--color-surface);
+  box-shadow: 0 24px 60px rgb(15 23 42 / 25%);
+  outline: none;
+  animation: welcome-pop 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.assistant-popup-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.assistant-popup-avatar {
+  display: flex;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--color-accent-muted);
+  color: var(--color-accent);
+}
+
+.assistant-popup-close {
+  display: flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  margin-left: auto;
+  color: var(--color-ink-muted);
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.assistant-popup-close:hover {
+  background: var(--color-surface-2);
+  color: var(--color-ink);
+}
+
 /* --- Keyframes ----------------------------------------------------------- */
+
+@keyframes welcome-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes welcome-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
 
 @keyframes welcome-drift-a {
   to {

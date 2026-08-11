@@ -32,8 +32,19 @@ export function Signpost3D() {
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    });
+
+    /*
+     * Cap the pixel ratio at 1.5 rather than 2. On a Retina display the
+     * difference is invisible at this size, and the cost is not: a 2x buffer is
+     * 1.8x the fragments of a 1.5x one, every frame, forever. This was the
+     * single largest source of jank on the page.
+     */
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     // The model is PBR; without tone mapping the purples clip to white.
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -96,22 +107,46 @@ export function Signpost3D() {
         const scale = 1 / Math.max(sphere.radius, 0.001);
 
         model.scale.setScalar(scale);
-        model.position.copy(sphere.center).multiplyScalar(-scale);
+
+        /*
+         * X and Z must sit on the rotation axis or the post wobbles instead of
+         * spinning. Y is free, and it is set in `fit` below — the base is
+         * planted on the bottom of the frame, so the post stands on the page
+         * rather than floating in the middle of it.
+         */
+        const axisX = -sphere.center.x * scale;
+        const axisZ = -sphere.center.z * scale;
+        const footY = box.min.y * scale;
 
         turntable.add(model);
 
         /*
-         * Fit the post to the viewport's HEIGHT, not its width. The frame is
-         * tall and narrow, so fitting the bounding sphere to width would pull
-         * the camera back until the post was a toy in the middle of a mostly
-         * empty column. The signs sweep wider than the post during the turn
-         * and are allowed to run past the frame edge, which is what a real
-         * signpost seen from the pavement does anyway.
+         * Fit BOTH axes, and take whichever is more demanding. The signs sweep
+         * out past the post as it turns, so a fit that only satisfied height
+         * pushed them off the frame — the object has to fit the narrow axis
+         * too, at every angle of the turn, which is what the bounding sphere
+         * guarantees.
          */
         fit = () => {
           const vFov = (camera.fov * Math.PI) / 180;
-          camera.position.set(0, 0, 1.02 / Math.sin(vFov / 2));
+          const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+          /*
+           * Height is the binding constraint; width is allowed to bind a
+           * little less. A frame this narrow, fitted strictly to width, pushes
+           * the camera far enough back that the post becomes a toy — so the
+           * horizontal requirement is relaxed by a fifth, which lets the tips
+           * of the signs pass the edge at the widest point of the turn and
+           * keeps the post itself a real object on the page.
+           */
+          const distance = Math.max(1 / Math.sin(vFov / 2), (1 / Math.sin(hFov / 2)) * 0.8) * 1.02;
+
+          camera.position.set(0, 0, distance);
           camera.lookAt(0, 0, 0);
+
+          // Plant the base on the bottom edge of the visible frustum, with a
+          // sliver of margin so the foot is never clipped by rounding.
+          const visibleHeight = 2 * distance * Math.tan(vFov / 2);
+          model.position.set(axisX, -visibleHeight / 2 - footY + visibleHeight * 0.02, axisZ);
         };
 
         resize();
@@ -121,10 +156,22 @@ export function Signpost3D() {
     );
 
     const clock = new THREE.Clock();
-    const tick = (): void => {
+
+    /*
+     * Rendered at 36fps, not at the display's refresh rate. The object turns
+     * once every 22 seconds; nobody can tell 36 from 120 at that speed, and the
+     * frames saved are frames the browser can spend on scrolling, which people
+     * absolutely can tell.
+     */
+    const FRAME_MS = 1000 / 36;
+    let last = 0;
+
+    const tick = (now = 0): void => {
       raf = requestAnimationFrame(tick);
-      // Continuous, frame-rate independent: the same speed on a 60Hz laptop
-      // and a 120Hz display.
+      if (now - last < FRAME_MS) return;
+      last = now;
+
+      // Frame-rate independent: the same speed whatever the cadence.
       turntable.rotation.y += (clock.getDelta() * Math.PI * 2) / TURN_SECONDS;
       renderer.render(scene, camera);
     };
@@ -140,10 +187,30 @@ export function Signpost3D() {
         raf = 0;
       } else if (raf === 0) {
         clock.getDelta();
+        last = 0;
         tick();
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
+
+    /*
+     * Stop entirely when the post is scrolled out of view. It is fixed, so this
+     * mostly matters on the sections below the fold at narrow-but-visible
+     * widths — and a renderer that runs while off-screen is pure waste.
+     */
+    const visibility = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting === true) {
+        if (raf === 0) {
+          clock.getDelta();
+          last = 0;
+          tick();
+        }
+      } else {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    });
+    visibility.observe(node);
 
     resize();
     tick();
@@ -152,6 +219,7 @@ export function Signpost3D() {
       disposed = true;
       cancelAnimationFrame(raf);
       observer.disconnect();
+      visibility.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
 
       // WebGL contexts are a limited resource; releasing them matters in an

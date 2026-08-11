@@ -44,6 +44,8 @@ export class GroqError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Present on 429: how long the provider asked us to wait. */
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'GroqError';
@@ -56,7 +58,51 @@ export interface GroqOptions {
   readonly timeoutMs?: number;
 }
 
+/*
+ * The free tier allows 12,000 tokens per minute, and one assistant turn can
+ * carry a few thousand between tool schemas, history and tool results. Hitting
+ * that ceiling is normal operation, not a failure — Groq says exactly how long
+ * to wait, so the right response is to wait and retry rather than to surface a
+ * 429 to someone who only asked what their projects are.
+ */
+const MAX_RETRIES = 2;
+const MAX_BACKOFF_MS = 12_000;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** How long the provider says to wait, in ms, or a sensible default. */
+function retryDelay(response: Response, attempt: number): number {
+  const header =
+    response.headers.get('retry-after') ?? response.headers.get('x-ratelimit-reset-tokens');
+
+  if (header !== null) {
+    // Either seconds ("4") or a duration ("3.895s"); both parse the same way.
+    const seconds = Number.parseFloat(header);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return Math.min(seconds * 1000 + 250, MAX_BACKOFF_MS);
+    }
+  }
+
+  return Math.min(1000 * 2 ** attempt, MAX_BACKOFF_MS);
+}
+
 export async function chat(
+  options: GroqOptions,
+  messages: readonly ChatMessage[],
+  tools: readonly ChatTool[],
+): Promise<ChatResult> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await once(options, messages, tools);
+    } catch (error) {
+      const limited = error instanceof GroqError && error.status === 429;
+      if (!limited || attempt >= MAX_RETRIES) throw error;
+      await sleep(error.retryAfterMs ?? 1000 * 2 ** attempt);
+    }
+  }
+}
+
+async function once(
   options: GroqOptions,
   messages: readonly ChatMessage[],
   tools: readonly ChatTool[],
@@ -80,7 +126,9 @@ export async function chat(
         // Low but not zero: the assistant should be predictable about which
         // action it picks, while still writing readable prose.
         temperature: 0.2,
-        max_tokens: 1024,
+        // Enough for a paragraph and a tool call; every token here is also a
+        // token against the per-minute budget.
+        max_tokens: 700,
       }),
       signal: controller.signal,
     });
@@ -95,13 +143,18 @@ export async function chat(
   }
 
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new GroqError(
+        'The assistant is busy — its per-minute budget is spent. Try again shortly.',
+        429,
+        retryDelay(response, 0),
+      );
+    }
+
     // The provider's own message can echo request content, so it is summarised
     // rather than forwarded verbatim.
     const detail = response.status === 401 ? 'The assistant credential was rejected.' : '';
-    throw new GroqError(
-      `The assistant provider returned ${response.status}. ${detail}`.trim(),
-      response.status === 429 ? 429 : 502,
-    );
+    throw new GroqError(`The assistant provider returned ${response.status}. ${detail}`.trim(), 502);
   }
 
   const payload = (await response.json()) as {
