@@ -117,6 +117,7 @@ export function Signpost3D() {
         const axisX = -sphere.center.x * scale;
         const axisZ = -sphere.center.z * scale;
         const footY = box.min.y * scale;
+        const modelHeight = (box.max.y - box.min.y) * scale;
 
         turntable.add(model);
 
@@ -127,26 +128,30 @@ export function Signpost3D() {
          * too, at every angle of the turn, which is what the bounding sphere
          * guarantees.
          */
+        /*
+         * Frame the post the way a photograph of one would be framed: standing
+         * on the ground, filling most of the height.
+         *
+         * Solved from the height directly rather than from a bounding sphere.
+         * The sphere includes the signs' horizontal reach, so fitting it put
+         * the post at a fraction of the frame and left the impression that
+         * nothing was there. Here the column occupies a fixed share of the
+         * height whatever the viewport, and its base sits a tenth of the way up
+         * from the bottom, which is where a pavement would be.
+         */
+        const HEIGHT_SHARE = 0.85;
+        const GROUND_SHARE = 0.1;
+
         fit = () => {
           const vFov = (camera.fov * Math.PI) / 180;
-          const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
-          /*
-           * Height is the binding constraint; width is allowed to bind a
-           * little less. A frame this narrow, fitted strictly to width, pushes
-           * the camera far enough back that the post becomes a toy — so the
-           * horizontal requirement is relaxed by a fifth, which lets the tips
-           * of the signs pass the edge at the widest point of the turn and
-           * keeps the post itself a real object on the page.
-           */
-          const distance = Math.max(1 / Math.sin(vFov / 2), (1 / Math.sin(hFov / 2)) * 0.8) * 1.02;
+          const distance = modelHeight / (HEIGHT_SHARE * 2 * Math.tan(vFov / 2));
 
           camera.position.set(0, 0, distance);
           camera.lookAt(0, 0, 0);
 
-          // Plant the base on the bottom edge of the visible frustum, with a
-          // sliver of margin so the foot is never clipped by rounding.
           const visibleHeight = 2 * distance * Math.tan(vFov / 2);
-          model.position.set(axisX, -visibleHeight / 2 - footY + visibleHeight * 0.02, axisZ);
+          const ground = -visibleHeight / 2 + visibleHeight * GROUND_SHARE;
+          model.position.set(axisX, ground - footY, axisZ);
         };
 
         resize();
