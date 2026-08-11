@@ -31,9 +31,36 @@ const CLAUDE_DESKTOP_CONFIG = `{
   }
 }`;
 
+/**
+ * Claude Desktop speaks stdio, so a hosted endpoint is reached through
+ * `mcp-remote`, which bridges the two and carries the bearer token.
+ */
+const remoteConfig = (url: string): string => `{
+  "mcpServers": {
+    "asana-connector": {
+      "command": "npx",
+      "args": [
+        "mcp-remote", "${url}",
+        "--header", "Authorization: Bearer \${MCP_AUTH_TOKEN}"
+      ],
+      "env": { "MCP_AUTH_TOKEN": "<your token>" }
+    }
+  }
+}`;
+
 export function Mcp() {
   const status = useStatus();
   const actions = useActions();
+
+  /*
+   * The endpoint's address. PUBLIC_BASE_URL is the deployment stating its own
+   * public origin; without it the console can only report where it was loaded
+   * from, which is right locally and on the deployment itself but wrong
+   * everywhere else — so which one is being shown is said out loud.
+   */
+  const configured = status.data?.config.mcp.publicUrl ?? null;
+  const endpoint = configured ?? `${window.location.origin}/mcp`;
+  const authRequired = status.data?.config.mcp.authRequired ?? false;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -84,6 +111,76 @@ export function Mcp() {
         </Panel>
       </div>
 
+      {/* The endpoint, under the status strip: what it is, then where it is. */}
+      <Panel className="mb-4">
+        <PanelHeader
+          title="Endpoint"
+          description="Streamable HTTP. Point any MCP client at this URL — it is the same adapter, over the same connector actions."
+        />
+        <div className="space-y-4 p-4">
+          <div>
+            <div className="mb-1.5 flex flex-wrap items-center gap-2">
+              <p className="text-xs font-medium text-(--color-ink)">MCP URL</p>
+              <StatusPill tone={configured === null ? 'warning' : 'success'}>
+                {configured === null ? 'From this origin' : 'Configured'}
+              </StatusPill>
+              <StatusPill tone={authRequired ? 'success' : 'danger'}>
+                {authRequired ? 'Bearer token required' : 'No token set'}
+              </StatusPill>
+            </div>
+            <CodeBlock code={endpoint} />
+            <p className="mt-1.5 text-[11px] text-(--color-ink-subtle)">
+              {configured === null ? (
+                <>
+                  Nothing is configured, so this is the origin the console was loaded from. Set{' '}
+                  <code className="mono">PUBLIC_BASE_URL</code> on the deployment to publish its real
+                  address here.
+                </>
+              ) : (
+                <>
+                  From <code className="mono">PUBLIC_BASE_URL</code> on the deployment. Liveness is
+                  at <code className="mono">{`${endpoint}/health`}</code> and needs no credential.
+                </>
+              )}
+            </p>
+            {authRequired ? null : (
+              <p className="mt-1.5 text-[11px] text-(--color-warning)">
+                <code className="mono">MCP_AUTH_TOKEN</code> is unset, so this endpoint is open. It
+                executes real actions with the server&apos;s credential — set one before leaving it
+                reachable.
+              </p>
+            )}
+          </div>
+
+          <CommandBlock
+            label="Try it"
+            command={`curl -X POST ${endpoint} \\
+  -H 'Authorization: Bearer <token>' \\
+  -H 'Content-Type: application/json' \\
+  -H 'Accept: application/json, text/event-stream' \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`}
+            note="Lists the tools. Both Accept types are required by the Streamable HTTP transport."
+          />
+
+          <CommandBlock
+            label="Open in the MCP Inspector"
+            command={`npx @modelcontextprotocol/inspector ${endpoint}`}
+            note="Browse and call the tools by hand against the hosted endpoint."
+          />
+
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-(--color-ink)">
+              Claude Desktop, against this endpoint
+            </p>
+            <p className="mb-2 text-[11px] text-(--color-ink-subtle)">
+              Claude Desktop speaks stdio, so <code className="mono">mcp-remote</code> bridges it to
+              the hosted URL and carries the token.
+            </p>
+            <CodeBlock code={remoteConfig(endpoint)} />
+          </div>
+        </div>
+      </Panel>
+
       {/* How to run */}
       <Panel className="mb-4">
         <PanelHeader
@@ -106,20 +203,6 @@ export function Mcp() {
             command="MCP_TRANSPORT=http npm run mcp"
             note="For a deployed endpoint. Terminate TLS at your platform's proxy."
           />
-
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-(--color-ink)">This deployment</p>
-            <p className="mb-2 text-[11px] text-(--color-ink-subtle)">
-              The API server mounts the same adapter, so this origin is already an MCP endpoint. It
-              executes real actions with the server&apos;s credential, so it requires a bearer
-              token.
-            </p>
-            <CodeBlock code={`${window.location.origin}/mcp`} />
-            <p className="mt-1.5 mb-3 text-[11px] text-(--color-ink-subtle)">
-              Send <code className="mono">Authorization: Bearer &lt;MCP_AUTH_TOKEN&gt;</code>.
-              Liveness is at <code className="mono">/mcp/health</code> and needs no credential.
-            </p>
-          </div>
 
           <div>
             <p className="mb-1.5 text-xs font-medium text-(--color-ink)">

@@ -54,7 +54,6 @@ tmp/
 .claude/
 IMG_8810.jpg
 
-# The 91MB source model. The optimised 2.6MB build of it is committed at
-# frontend/public/models/signpost.glb; this original is not.
+# Source 3D models. Nothing on the site renders one any more; this only keeps
+# a stray export from being committed by accident.
 *.glb
-!frontend/public/models/signpost.glb

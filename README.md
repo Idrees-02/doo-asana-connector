@@ -171,6 +171,7 @@ locally and deployed with nothing changed but the environment. See
 | `ASANA_MAX_CONCURRENCY` | `8` | In-flight request cap (Asana allows 50 GET / 15 write) |
 | `PORT` | `8787` | API port |
 | `MCP_TRANSPORT` | `stdio` | `stdio` locally, `http` for a deployed endpoint |
+| `PUBLIC_BASE_URL` | — | This deployment's public origin. The console prints `<origin>/mcp` as the MCP endpoint |
 
 `ASANA_MODE=live` without credentials **fails at startup on purpose** — silently
 serving synthetic data to someone who asked for real data would be the worst

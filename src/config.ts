@@ -82,6 +82,12 @@ const envSchema = z.object({
   // Directory of a built console to serve from this origin. Blank => look for
   // frontend/dist, which is how a single-service deploy (e.g. Railway) works.
   WEB_DIST: optionalString,
+  // The origin this deployment is reachable on, e.g.
+  // https://doo-asana-connector.up.railway.app. Blank => the console falls back
+  // to whatever origin it was loaded from, which is right locally and right on
+  // the deployment itself; setting it is what lets the console print the real
+  // public MCP URL when it is being read anywhere else.
+  PUBLIC_BASE_URL: optionalString,
 
   // MCP -------------------------------------------------------------------
   // stdio is the local default (what the mentor and Claude Desktop use);
@@ -136,6 +142,8 @@ export interface ServerConfig {
   readonly trustProxy: boolean;
   /** Explicit console build directory, when one was configured. */
   readonly webDist: string | undefined;
+  /** Public origin of this deployment, when it has been configured. */
+  readonly publicBaseUrl: string | undefined;
 }
 
 export interface McpConfig {
@@ -233,6 +241,8 @@ export function buildConfig(raw: NodeJS.ProcessEnv): AppConfig {
       corsOrigin: env.CORS_ORIGIN,
       trustProxy: env.TRUST_PROXY,
       webDist: env.WEB_DIST,
+      // Trailing slashes would double up when a path is appended to this.
+      publicBaseUrl: env.PUBLIC_BASE_URL?.replace(/\/+$/, ''),
     },
     mcp: {
       transport: env.MCP_TRANSPORT,
@@ -334,12 +344,19 @@ export interface SafeConfigDescription {
     /** Non-reversible identifier so you can tell *which* credential is loaded. */
     readonly credentialFingerprint: string | null;
   };
-  readonly server: { readonly port: number; readonly corsOrigin: string };
+  readonly server: {
+    readonly port: number;
+    readonly corsOrigin: string;
+    /** Null when unset, in which case the console uses its own origin. */
+    readonly publicBaseUrl: string | null;
+  };
   readonly mcp: {
     readonly transport: string;
     readonly httpPort: number;
     /** Whether the public endpoint is guarded. Never the token itself. */
     readonly authRequired: boolean;
+    /** The endpoint's public URL, when a public origin is configured. */
+    readonly publicUrl: string | null;
   };
   /** Whether an assistant provider is configured. Never the key itself. */
   readonly aiEnabled: boolean;
@@ -366,11 +383,19 @@ export function describeConfig(cfg: AppConfig, fingerprint: string | null = null
       oauthScopes: cfg.oauth?.scopes ?? [],
       credentialFingerprint: fingerprint,
     },
-    server: { port: cfg.server.port, corsOrigin: cfg.server.corsOrigin },
+    server: {
+      port: cfg.server.port,
+      corsOrigin: cfg.server.corsOrigin,
+      publicBaseUrl: cfg.server.publicBaseUrl ?? null,
+    },
     mcp: {
       transport: cfg.mcp.transport,
       httpPort: cfg.mcp.httpPort,
       authRequired: cfg.mcp.authToken !== undefined,
+      // Derived rather than separately configured: the endpoint is always
+      // /mcp on this origin, so one variable cannot drift from the other.
+      publicUrl:
+        cfg.server.publicBaseUrl === undefined ? null : `${cfg.server.publicBaseUrl}/mcp`,
     },
     aiEnabled: cfg.ai.enabled,
     aiModel: cfg.ai.enabled ? cfg.ai.model : null,

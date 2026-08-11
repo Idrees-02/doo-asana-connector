@@ -165,8 +165,19 @@ export interface ConnectorStatus {
       readonly oauthScopes: string[];
       readonly credentialFingerprint: string | null;
     };
-    readonly server: { readonly port: number; readonly corsOrigin: string };
-    readonly mcp: { readonly transport: string; readonly httpPort: number };
+    readonly server: {
+      readonly port: number;
+      readonly corsOrigin: string;
+      /** Null unless PUBLIC_BASE_URL is set on the deployment. */
+      readonly publicBaseUrl: string | null;
+    };
+    readonly mcp: {
+      readonly transport: string;
+      readonly httpPort: number;
+      readonly authRequired: boolean;
+      /** The endpoint's public URL, derived from PUBLIC_BASE_URL. */
+      readonly publicUrl: string | null;
+    };
     readonly credentialEncryptionEnabled: boolean;
   };
   readonly demoMode: boolean;

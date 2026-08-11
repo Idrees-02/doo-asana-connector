@@ -315,6 +315,32 @@
   color-scheme: light;
 }
 
+/* The bar is fixed, so an anchor that lands flush with the top lands under it.
+   Every section keeps its own clearance. */
+.welcome section {
+  scroll-margin-top: 4.5rem;
+}
+
+/*
+ * The headline, in the page's own purples rather than in ink.
+ *
+ * The gradient runs deep-to-vivid across the line. `color` is set first and
+ * stands on its own: where `background-clip: text` is unsupported the heading
+ * is simply the strong purple, which is 8.26:1 on this canvas — the effect
+ * degrades to a colour, never to invisible text.
+ */
+.welcome-title {
+  color: var(--color-accent-strong);
+  background: linear-gradient(
+    100deg,
+    var(--robot-deep) 0%,
+    var(--color-accent-strong) 38%,
+    var(--color-accent) 100%
+  );
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 .welcome-rise {
   transition:
     opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -355,6 +381,67 @@
   animation: welcome-drift-b 26s ease-in-out infinite alternate;
 }
 
+/* The wordmark as a watermark: oversized, anchored to the top-left corner and
+   bled off both edges, so it reads as a texture in the corner rather than as a
+   second logo competing with the one in the bar. Fixed, like the rest of the
+   atmosphere — the page scrolls past it. */
+.welcome-watermark {
+  position: absolute;
+  /* Well clear of the bar, so the mark sits under it rather than being sliced
+     into a row of half-circles by it. */
+  top: 7.5rem;
+  left: 1.5rem;
+  width: 15rem;
+  height: auto;
+  color: var(--color-accent);
+  opacity: 0.06;
+}
+
+@media (max-width: 48rem) {
+  .welcome-watermark {
+    top: 5.5rem;
+    left: 1rem;
+    width: 10rem;
+  }
+}
+
+/* --- The street lamp ------------------------------------------------------
+   Fixed to the right-hand gutter, still, and the full height of the viewport:
+   it stands from the top of the screen to the bottom, and the page scrolls
+   past it.
+
+   Only shown from 1360px, which is the first width where the gutter beside the
+   64rem column is wide enough to stand it in without crowding the text.
+   ------------------------------------------------------------------------ */
+.welcome-lamppost {
+  position: fixed;
+  /* Head just under the bar, base on the floor of the screen: the post fills
+     the gutter from one edge to the other. */
+  top: 4.25rem;
+  right: 2.5rem;
+  display: none;
+  /* Height drives it; the width follows from the frame's own ratio, which is
+     what makes the base actually land on the floor instead of the drawing
+     being fitted to the width and centred with a gap top and bottom. */
+  width: auto;
+  height: calc(100dvh - 4.25rem);
+  filter: drop-shadow(0 18px 30px rgb(46 16 101 / 14%));
+}
+
+@media (min-width: 1360px) {
+  .welcome-lamppost {
+    display: block;
+  }
+}
+
+.welcome-lamppost-label {
+  fill: #fff;
+  font-family: var(--font-sans);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
 /* A faint rule grid, masked at the edges so it never draws a hard border. */
 .welcome-grid {
   position: absolute;
@@ -368,72 +455,99 @@
   transform: translateZ(0);
 }
 
-/* --- The signpost --------------------------------------------------------
-   The real 3D model, fixed to the viewport: the page scrolls past it, the post
-   itself never moves — it only turns, continuously, on its own axis.
-   Hidden below 1280px. It is decorative, and a phone should not download a
-   3D model and a renderer for decoration.
-   ------------------------------------------------------------------------ */
+/* --- The top bar ---------------------------------------------------------- */
 
-.welcome-signpost {
+.welcome-nav {
   position: fixed;
   top: 0;
-  /* Full height, because the post stands on the bottom of it: the base is
-     planted on the frame's floor and the column runs up from there. */
-  top: 0;
-  right: max(0.5rem, calc((100vw - 72rem) / 9));
-  z-index: 0;
-  display: none;
-  width: 34rem;
-  height: 100dvh;
-  pointer-events: none;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem max(1.25rem, calc((100vw - 72rem) / 2));
+  border-bottom: 1px solid transparent;
+  /* Frosted rather than solid: the aurora keeps moving underneath it. */
+  backdrop-filter: blur(12px);
+  background: rgb(250 248 252 / 72%);
+  transition:
+    opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@media (min-width: 1280px) {
-  .welcome-signpost {
-    display: block;
+.welcome-nav-mark {
+  display: inline-flex;
+  color: var(--color-accent);
+  transition: opacity 200ms ease;
+}
+
+.welcome-nav-mark:hover {
+  opacity: 0.75;
+}
+
+.welcome-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  color: var(--color-ink-subtle);
+  font-size: 0.85rem;
+}
+
+.welcome-nav-links a {
+  transition: color 200ms ease;
+}
+
+.welcome-nav-links a:hover {
+  color: var(--color-accent);
+}
+
+.welcome-nav-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  box-shadow: 0 6px 18px rgb(124 58 237 / 28%);
+  color: #fff;
+  font-weight: 500;
+  transition:
+    background 200ms ease,
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.welcome-nav-cta:hover {
+  background: var(--color-accent-hover);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* The two text links are the first thing to go when the bar gets tight; the
+   mark and the way in are not negotiable. */
+@media (max-width: 33rem) {
+  .welcome-nav-links a:not(.welcome-nav-cta) {
+    display: none;
   }
 }
 
-.welcome-post3d {
-  width: 100%;
-  height: 100%;
-}
-
-/* Sits at GROUND_SHARE of the frame height, matching where Signpost3D plants
-   the model's base. Change one and change the other. */
-.welcome-post-ground {
-  position: absolute;
-  bottom: 35%;
-  left: 50%;
-  width: 16rem;
-  height: 3rem;
-  margin-left: -8rem;
-  background: radial-gradient(ellipse at center, rgb(46 16 101 / 22%) 0%, transparent 68%);
-  transform: translateY(50%);
-}
-
-.welcome-post3d canvas {
-  display: block;
-  /* Grounds the object against the page, which a transparent canvas cannot. */
-  filter: drop-shadow(0 24px 40px rgb(46 16 101 / 20%));
-}
-
-/* Room for the post: only where the post exists. */
-@media (min-width: 1280px) {
-  .welcome-shift {
-    /* Clears the post's column, signs included, at 1280px and above. */
-    transform: translateX(-15rem);
-  }
-}
-
-/* --- The action ring ------------------------------------------------------ */
+/* --- The action ring ------------------------------------------------------
+   A carousel of the six domains, turning on its own axis. It reads `--enter`
+   (0…1, this section's own travel through the viewport, written by
+   useSectionProgress) to tilt out of the page plane and rise into depth as it
+   arrives — the perspective shift is tied to the scroll, not to a timer.
+   ------------------------------------------------------------------------ */
 
 .welcome-ring-stage {
+  --pass: 0.5;
+
   position: relative;
-  height: 20rem;
+  /* Tall enough for the ring plus its floor, and no taller — the cards sweep
+     out to the sides, not downwards. */
+  height: 17rem;
   margin-top: 3rem;
-  perspective: 1200px;
+  perspective: 1100px;
+  perspective-origin: 50% 40%;
 }
 
 .welcome-ring {
@@ -443,14 +557,35 @@
   width: 11rem;
   height: 7rem;
   margin-left: -5.5rem;
+  /* A fixed tilt. Nothing here moves toward or away from the camera — the
+     depth ramp this used to have read as a zoom. */
+  transform: rotateX(12deg);
+  transform-style: preserve-3d;
+}
+
+/* Scroll adds a third of a turn across the section's full pass through the
+   viewport: the ring answers the wheel without ever being the thing that
+   drives it, so it cannot stall. */
+.welcome-ring-scroll {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(calc(var(--pass) * 120deg));
+  transform-style: preserve-3d;
+}
+
+/* The continuous turn. Its own layer, because the scroll rotation above and
+   this animation are both `transform` and one element cannot hold both. It
+   never pauses — not on hover, not at rest. */
+.welcome-ring-cards {
+  position: absolute;
+  inset: 0;
   transform-style: preserve-3d;
   animation: welcome-ring-spin 30s linear infinite;
 }
 
-/* Pausing on hover is the whole reason the labels are readable at all. */
-.welcome-ring-stage:hover .welcome-ring {
-  animation-play-state: paused;
-}
+/* Deliberately no hover pause. Pausing on hover meant the ring stopped dead
+   the moment the pointer happened to be over it while scrolling past — which
+   is most of the time. Readability comes from the turn being slow. */
 
 .welcome-ring-card {
   position: absolute;
@@ -467,6 +602,16 @@
   /* Six seats, 60° apart, pushed out to the ring's radius. */
   transform: rotateY(calc(var(--i) * 60deg)) translateZ(11.5rem);
   backface-visibility: hidden;
+  transition:
+    border-color 240ms ease,
+    box-shadow 240ms ease;
+}
+
+.welcome-ring-card:hover {
+  border-color: var(--color-accent);
+  box-shadow:
+    0 10px 30px rgb(46 16 101 / 14%),
+    0 0 0 4px rgb(124 58 237 / 12%);
 }
 
 .welcome-ring-count {
@@ -488,7 +633,7 @@
 /* A soft floor so the ring sits in space rather than hovering in a void. */
 .welcome-ring-floor {
   position: absolute;
-  bottom: 1.5rem;
+  bottom: 0.5rem;
   left: 50%;
   width: 30rem;
   height: 3rem;
@@ -555,6 +700,24 @@
   background: radial-gradient(circle, var(--color-accent) 0%, transparent 68%);
   opacity: 0.18;
   animation: welcome-breathe 4s ease-in-out infinite;
+}
+
+/* The particle field around the machine: soft purple motes on a slow rise, so
+   the robot sits inside its own glow rather than on a flat page. Decorative,
+   behind the drawing, and untouchable by the pointer. */
+.welcome-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.welcome-particle {
+  position: absolute;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  box-shadow: 0 0 8px rgb(124 58 237 / 60%);
+  opacity: 0;
+  animation: welcome-mote 6s ease-in-out infinite;
 }
 
 /* Hovering, not walking: the whole machine drifts on a long slow cycle. */
@@ -753,10 +916,51 @@
 }
 
 .welcome-surface {
+  position: relative;
+  overflow: hidden;
   padding: 1.5rem;
   border: 1px solid var(--color-hairline);
   border-radius: 1rem;
   background: var(--color-surface);
+  transition:
+    border-color 300ms ease,
+    box-shadow 300ms ease,
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.welcome-surface:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 18px 40px rgb(46 16 101 / 12%);
+  transform: translateY(-3px);
+}
+
+/* The purple bloom behind the card, lit on hover. Kept as its own element so
+   the glow can fade independently of the card's own transition. */
+.welcome-surface-glow {
+  position: absolute;
+  top: -40%;
+  left: -20%;
+  width: 140%;
+  height: 140%;
+  background: radial-gradient(circle at 30% 0%, var(--color-accent) 0%, transparent 62%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 340ms ease;
+}
+
+.welcome-surface:hover .welcome-surface-glow {
+  opacity: 0.09;
+}
+
+.welcome-surface-index {
+  position: absolute;
+  top: 0.9rem;
+  right: 1.1rem;
+  color: var(--color-accent);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.14em;
+  opacity: 0.4;
 }
 
 /* Arrives once, when first scrolled into view. */
@@ -1060,13 +1264,22 @@
   }
 }
 
-@keyframes welcome-lamp {
-  0%,
-  100% {
-    opacity: 0.55;
+/* A mote rising past the machine: fades in, drifts up and out. */
+@keyframes welcome-mote {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.6);
   }
-  50% {
-    opacity: 1;
+  25% {
+    opacity: 0.75;
+  }
+  60% {
+    opacity: 0.5;
+    transform: translateY(-10px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px) scale(0.7);
   }
 }
 
@@ -1088,7 +1301,7 @@
 
 /*
  * Motion here is decoration only: with it disabled the landing is a still page
- * that says exactly the same thing, robot and signpost included.
+ * that says exactly the same thing, robot and ring included.
  */
 @media (prefers-reduced-motion: reduce) {
   .welcome-orb,
@@ -1108,21 +1321,19 @@
   .welcome-robot-scanline,
   .welcome-robot-bit,
   .welcome-rotator-word,
-  .welcome-post-lamplight,
-  .welcome-post-filament,
-  .welcome-ring {
+  .welcome-particle,
+  .welcome-ring-cards {
     animation: none;
   }
 
-  .welcome-post-rotor,
-  .welcome-post-sign {
+  .welcome-robot-svg,
+  .welcome-robot-head {
     transform: none;
   }
 
-  .welcome-robot-svg,
-  .welcome-robot-head,
-  .welcome-signs {
-    transform: none;
+  /* The motes still exist, they simply stop moving. */
+  .welcome-particle {
+    opacity: 0.35;
   }
 
   .welcome-rise,

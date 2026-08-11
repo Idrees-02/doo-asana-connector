@@ -5,9 +5,10 @@
  * it has one job: say what this is and offer the two ways in — the console for
  * people, the MCP endpoint for agents.
  *
- * It is deliberately alive. A full-body robot tracks the pointer with its eyes
- * and head, a prism of panels turns as the page scrolls, and the robot drifts
- * with it. Two rules keep that from being noise:
+ * It reads as one continuous scroll sequence: the robot in a field of purple
+ * particles, then a ring of domain cards that tilts into depth as it comes into
+ * view, then the three surfaces, then the two ways in. Two rules keep that from
+ * being noise:
  *
  *   1. Motion is driven by CSS custom properties written from one rAF-throttled
  *      listener each. React never re-renders on pointer or scroll movement.
@@ -15,19 +16,11 @@
  *      the page reads identically as a still document.
  */
 
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronDown, LayoutDashboard, Network, ShieldCheck, Zap } from 'lucide-react';
 
 import { useActions, useStatus } from '@/hooks/useConnector';
-
-/*
- * three.js and the model are a large payload for something decorative, so the
- * whole thing is split out and fetched after the page is interactive.
- */
-const Signpost3D = lazy(() =>
-  import('@/components/Signpost3D').then((m) => ({ default: m.Signpost3D })),
-);
 
 // Only fetched when someone actually clicks the robot.
 const AssistantPopup = lazy(() =>
@@ -63,23 +56,22 @@ export function Welcome() {
     <div ref={stage} className="welcome min-h-dvh">
       <Aurora />
 
-      <div className="welcome-signpost" aria-hidden="true">
-        {/* The contact shadow. A rendered object with no shadow floats; this
-            is what puts the post on the pavement. It is placed at the same
-            height the renderer plants the base. */}
-        <span className="welcome-post-ground" />
+      <header className="welcome-nav" style={rise(0)}>
+        <Link to="/" className="welcome-nav-mark" aria-label="doo">
+          <Wordmark className="h-6 w-auto" />
+        </Link>
+        <nav className="welcome-nav-links">
+          <Link to="/docs">Documentation</Link>
+          <Link to="/mcp">MCP</Link>
+          <Link to="/overview" className="welcome-nav-cta">
+            Open the console
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Link>
+        </nav>
+      </header>
 
-        <Suspense fallback={null}>
-          <Signpost3D />
-        </Suspense>
-      </div>
-
-      <main className="welcome-shift relative mx-auto flex min-h-dvh max-w-5xl flex-col items-center justify-center px-6 py-20 text-center">
-        <div className="welcome-rise" style={{ ...rise(0), color: 'var(--color-accent)' }}>
-          <Wordmark className="h-11 w-auto" />
-        </div>
-
-        <div className="welcome-rise mt-8" style={rise(80)}>
+      <main className="relative mx-auto flex min-h-dvh max-w-5xl flex-col items-center justify-center px-6 pt-28 pb-20 text-center">
+        <div className="welcome-rise mt-2" style={rise(80)}>
           <Robot onOpen={() => setChatOpen(true)} />
         </div>
 
@@ -91,8 +83,8 @@ export function Welcome() {
         </p>
 
         <h1
-          className="welcome-rise mt-4 text-4xl font-semibold tracking-tight text-balance sm:text-6xl"
-          style={{ ...rise(220), color: 'var(--color-ink)' }}
+          className="welcome-rise welcome-title mt-4 text-4xl font-semibold tracking-tight text-balance sm:text-6xl"
+          style={rise(220)}
         >
           The Asana Connector
         </h1>
@@ -156,11 +148,7 @@ export function Welcome() {
         </a>
       </main>
 
-      <section
-        id="what-it-is"
-        className="welcome-shift relative border-t px-6 py-24"
-        style={{ borderColor: 'var(--color-hairline)' }}
-      >
+      <section id="what-it-is" className="relative px-6 py-24">
         <div className="mx-auto max-w-5xl">
           <h2
             className="text-center text-2xl font-semibold sm:text-3xl"
@@ -180,10 +168,7 @@ export function Welcome() {
         </div>
       </section>
 
-      <section
-        className="welcome-shift relative border-t px-6 py-24"
-        style={{ borderColor: 'var(--color-hairline)' }}
-      >
+      <section className="relative px-6 py-24">
         <div className="mx-auto max-w-5xl">
           <h2
             className="text-center text-2xl font-semibold sm:text-3xl"
@@ -314,6 +299,65 @@ function useScrollProgress(ref: React.RefObject<HTMLElement | null>): void {
   }, [ref]);
 }
 
+/**
+ * Publish one element's full pass through the viewport as `--pass` (0…1).
+ *
+ * 0 the instant its top edge touches the bottom of the screen, 1 when its
+ * bottom edge leaves the top. The ring reads it as extra rotation, so scrolling
+ * turns it further — a shift the wheel drives directly and that reverses when
+ * you scroll back up.
+ *
+ * It deliberately drives rotation only. An earlier version moved the ring
+ * toward the camera, which read as a zoom and made the section feel like it was
+ * stalling rather than turning.
+ *
+ * The listener is only attached while the element is near the viewport, so the
+ * rest of the page scrolls without it.
+ */
+function useSectionProgress(ref: React.RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const node = ref.current;
+    if (node === null || prefersReducedMotion()) return;
+
+    let frame = 0;
+
+    const apply = (): void => {
+      frame = 0;
+      const rect = node.getBoundingClientRect();
+      const span = window.innerHeight + rect.height;
+      const travelled = (window.innerHeight - rect.top) / span;
+      node.style.setProperty('--pass', Math.min(1, Math.max(0, travelled)).toFixed(4));
+    };
+
+    const onScroll = (): void => {
+      if (frame === 0) frame = requestAnimationFrame(apply);
+    };
+
+    const watcher = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting === true) {
+          window.addEventListener('scroll', onScroll, { passive: true });
+          apply();
+        } else {
+          window.removeEventListener('scroll', onScroll);
+        }
+      },
+      // Start tracking a screen early, so the tilt has already begun when the
+      // ring's first pixel appears.
+      { rootMargin: '100% 0px' },
+    );
+
+    watcher.observe(node);
+    apply();
+
+    return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
+      watcher.disconnect();
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, [ref]);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Pieces                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -358,6 +402,8 @@ function RotatingWord() {
  */
 function ActionRing() {
   const actions = useActions();
+  const stage = useRef<HTMLDivElement>(null);
+  useSectionProgress(stage);
 
   const groups = [
     { name: 'Tasks', match: /task|subtask/ },
@@ -374,18 +420,25 @@ function ActionRing() {
   });
 
   return (
-    <div className="welcome-ring-stage">
+    <div ref={stage} className="welcome-ring-stage">
+      {/* Three layers, because each carries a different transform and one
+          element cannot hold three: the tilt, the scroll-driven rotation, and
+          the continuous turn. */}
       <div className="welcome-ring">
-        {counts.map((group, index) => (
-          <div
-            key={group.name}
-            className="welcome-ring-card"
-            style={{ '--i': index } as React.CSSProperties}
-          >
-            <span className="welcome-ring-count">{group.count > 0 ? group.count : '—'}</span>
-            <span className="welcome-ring-name">{group.name}</span>
+        <div className="welcome-ring-scroll">
+          <div className="welcome-ring-cards">
+            {counts.map((group, index) => (
+              <div
+                key={group.name}
+                className="welcome-ring-card"
+                style={{ '--i': index } as React.CSSProperties}
+              >
+                <span className="welcome-ring-count">{group.count > 0 ? group.count : '—'}</span>
+                <span className="welcome-ring-name">{group.name}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
       <span className="welcome-ring-floor" aria-hidden="true" />
     </div>
@@ -404,9 +457,13 @@ function ActionRing() {
  * guarantees and three stroked circles would not.
  */
 function Wordmark({ className = 'h-9 w-auto' }: { className?: string }) {
+  // The mark appears more than once on this page, and two masks answering to
+  // one id is a collision waiting to render the wrong shape.
+  const mask = `doo-counters-${useId()}`;
+
   return (
     <svg viewBox="0 0 580 226" role="img" aria-label="DOO" className={className}>
-      <mask id="doo-counters">
+      <mask id={mask}>
         {/* White keeps, black cuts. */}
         <circle cx="113" cy="113" r="113" fill="#fff" />
         <circle cx="290" cy="113" r="113" fill="#fff" />
@@ -418,7 +475,7 @@ function Wordmark({ className = 'h-9 w-auto' }: { className?: string }) {
         <circle cx="467" cy="113" r="62" fill="#000" />
       </mask>
 
-      <rect width="580" height="226" fill="currentColor" mask="url(#doo-counters)" />
+      <rect width="580" height="226" fill="currentColor" mask={`url(#${mask})`} />
     </svg>
   );
 }
@@ -440,6 +497,7 @@ function Robot({ onOpen }: { onOpen: () => void }) {
         Ask me anything
       </span>
       <span className="welcome-robot-halo" aria-hidden="true" />
+      <Particles />
 
       <svg viewBox="0 0 180 260" className="welcome-robot-svg" fill="none" aria-hidden="true">
         <defs>
@@ -600,6 +658,53 @@ function Robot({ onOpen }: { onOpen: () => void }) {
   );
 }
 
+/**
+ * The glow around the robot.
+ *
+ * Written out rather than randomised: a fixed set means the layout is the same
+ * on every render and on the server, and a hand-placed ring reads better than
+ * a random scatter, which always clumps. Each entry is an angle around the
+ * machine, a radius, a size and a phase offset for its drift.
+ */
+const PARTICLES = [
+  { angle: 8, radius: 46, size: 5, delay: 0 },
+  { angle: 52, radius: 40, size: 3, delay: 1.1 },
+  { angle: 96, radius: 48, size: 6, delay: 2.4 },
+  { angle: 140, radius: 38, size: 4, delay: 0.6 },
+  { angle: 186, radius: 45, size: 3, delay: 3.1 },
+  { angle: 224, radius: 42, size: 5, delay: 1.8 },
+  { angle: 268, radius: 47, size: 4, delay: 2.9 },
+  { angle: 312, radius: 39, size: 3, delay: 0.3 },
+  { angle: 348, radius: 44, size: 6, delay: 3.6 },
+  { angle: 30, radius: 30, size: 3, delay: 2.1 },
+  { angle: 160, radius: 28, size: 3, delay: 1.4 },
+  { angle: 290, radius: 31, size: 4, delay: 3.3 },
+];
+
+function Particles() {
+  return (
+    <span className="welcome-particles" aria-hidden="true">
+      {PARTICLES.map((particle) => (
+        <span
+          key={`${particle.angle}-${particle.radius}`}
+          className="welcome-particle"
+          style={
+            {
+              // Polar, so they sit on a ring around the machine rather than in
+              // a box around it.
+              left: `${50 + Math.cos((particle.angle * Math.PI) / 180) * particle.radius}%`,
+              top: `${50 + Math.sin((particle.angle * Math.PI) / 180) * particle.radius}%`,
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+              animationDelay: `${particle.delay}s`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </span>
+  );
+}
+
 /** Slow-drifting colour fields. Purely atmospheric; nothing reads on top of it. */
 function Aurora() {
   return (
@@ -607,7 +712,101 @@ function Aurora() {
       <div className="welcome-orb welcome-orb-a" />
       <div className="welcome-orb welcome-orb-b" />
       <div className="welcome-grid" />
+
+      {/* The mark as a watermark, oversized in the top-left corner: part of the
+          background, faint enough that the nav's logo stays the one you read. */}
+      <Wordmark className="welcome-watermark" />
+
+      <StreetLamp />
     </div>
+  );
+}
+
+/**
+ * A street lamp on the right-hand side, with a sign reading AI.
+ *
+ * Fixed to the viewport and completely still — no drift, no flicker, no
+ * animation of any kind. It stands the height of the page and the page scrolls
+ * past it, which is the only reason it can be this tall without ever pushing
+ * anything around: it is out of the flow entirely.
+ *
+ * Drawn in the page's own purples, so it reads as part of the scene rather than
+ * as an illustration dropped onto it, and only shown where there is a real
+ * gutter to stand in — a narrow window has no room beside the column.
+ */
+function StreetLamp() {
+  return (
+    <svg
+      className="welcome-lamppost"
+      viewBox="0 0 140 900"
+      fill="none"
+      aria-hidden="true"
+      role="presentation"
+    >
+      <defs>
+        {/* Lit from the left, where the page's light comes from. */}
+        <linearGradient id="lamp-post" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="var(--robot-edge)" />
+          <stop offset="55%" stopColor="var(--robot-mid)" />
+          <stop offset="100%" stopColor="var(--robot-deep)" />
+        </linearGradient>
+        <linearGradient id="lamp-sign" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--robot-mid)" />
+          <stop offset="100%" stopColor="var(--robot-deep)" />
+        </linearGradient>
+        <radialGradient id="lamp-glow">
+          <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* The pool of light. Static: a lamp that pulsed would be one more thing
+          moving on a page that already has enough. */}
+      <circle cx="70" cy="44" r="54" fill="url(#lamp-glow)" />
+
+      {/* Lamp head, at the very top of the frame so it sits just under the bar */}
+      <circle cx="70" cy="13" r="5" fill="var(--robot-edge)" />
+      <rect x="66" y="17" width="8" height="16" rx="3" fill="var(--robot-edge)" />
+      <path d="M46 58h48l-10-26H56z" fill="url(#lamp-post)" />
+      <rect x="52" y="52" width="36" height="8" rx="4" fill="var(--color-accent)" />
+
+      {/* Column, running the whole way down, with two collars to break up its
+          length. The frame is 140 × 900 — deliberately narrow and tall, because
+          an SVG scales to fit its box and a squarer frame would leave the post
+          floating short of the floor. */}
+      <rect x="63" y="58" width="14" height="818" rx="6" fill="url(#lamp-post)" />
+      <rect x="58" y="330" width="24" height="9" rx="4" fill="var(--robot-edge)" />
+      <rect x="58" y="660" width="24" height="9" rx="4" fill="var(--robot-edge)" />
+
+      {/* Base, planted on the floor of the frame */}
+      <ellipse cx="70" cy="896" rx="34" ry="7" fill="var(--robot-deep)" opacity="0.16" />
+      <path d="M52 898h36l-5-30H57z" fill="url(#lamp-post)" />
+      <rect x="49" y="862" width="42" height="10" rx="4" fill="var(--robot-edge)" />
+
+      {/* The sign, hung off the left of the column on two short brackets, so it
+          faces the page rather than the window edge. */}
+      <rect x="53" y="164" width="10" height="4" rx="2" fill="var(--robot-edge)" />
+      <rect x="53" y="226" width="10" height="4" rx="2" fill="var(--robot-edge)" />
+      <rect
+        x="4"
+        y="148"
+        width="52"
+        height="98"
+        rx="12"
+        fill="url(#lamp-sign)"
+        stroke="var(--robot-edge)"
+        strokeWidth="2"
+      />
+      <text
+        x="30"
+        y="197"
+        className="welcome-lamppost-label"
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        AI
+      </text>
+    </svg>
   );
 }
 
@@ -718,10 +917,14 @@ function Surface({ index, title, body }: { index: number; title: string; body: s
       data-shown={shown}
       style={{ transitionDelay: `${index * 110}ms` }}
     >
-      <h3 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+      <span className="welcome-surface-glow" aria-hidden="true" />
+      <span className="welcome-surface-index" aria-hidden="true">
+        {String(index + 1).padStart(2, '0')}
+      </span>
+      <h3 className="relative text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
         {title}
       </h3>
-      <p className="mt-2 text-sm" style={{ color: 'var(--color-ink-muted)' }}>
+      <p className="relative mt-2 text-sm" style={{ color: 'var(--color-ink-muted)' }}>
         {body}
       </p>
     </div>
