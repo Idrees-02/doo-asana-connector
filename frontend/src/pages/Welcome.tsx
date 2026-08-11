@@ -64,6 +64,11 @@ export function Welcome() {
       <Aurora />
 
       <div className="welcome-signpost" aria-hidden="true">
+        {/* The contact shadow. A rendered object with no shadow floats; this
+            is what puts the post on the pavement. It is placed at the same
+            height the renderer plants the base. */}
+        <span className="welcome-post-ground" />
+
         <Suspense fallback={null}>
           <Signpost3D />
         </Suspense>

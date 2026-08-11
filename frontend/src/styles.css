@@ -400,6 +400,19 @@
   height: 100%;
 }
 
+/* Sits at GROUND_SHARE of the frame height, matching where Signpost3D plants
+   the model's base. Change one and change the other. */
+.welcome-post-ground {
+  position: absolute;
+  bottom: 26%;
+  left: 50%;
+  width: 16rem;
+  height: 3rem;
+  margin-left: -8rem;
+  background: radial-gradient(ellipse at center, rgb(46 16 101 / 22%) 0%, transparent 68%);
+  transform: translateY(50%);
+}
+
 .welcome-post3d canvas {
   display: block;
   /* Grounds the object against the page, which a transparent canvas cannot. */

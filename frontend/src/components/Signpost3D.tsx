@@ -139,8 +139,11 @@ export function Signpost3D() {
          * height whatever the viewport, and its base sits a tenth of the way up
          * from the bottom, which is where a pavement would be.
          */
-        const HEIGHT_SHARE = 0.85;
-        const GROUND_SHARE = 0.1;
+        // Under two thirds of the frame, standing well clear of the bottom
+        // edge: at 0.85 it dominated the page, and a base planted on the very
+        // edge reads as cut off rather than as standing on something.
+        const HEIGHT_SHARE = 0.58;
+        const GROUND_SHARE = 0.26;
 
         fit = () => {
           const vFov = (camera.fov * Math.PI) / 180;
