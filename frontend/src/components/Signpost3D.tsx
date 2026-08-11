@@ -143,7 +143,7 @@ export function Signpost3D() {
         // edge: at 0.85 it dominated the page, and a base planted on the very
         // edge reads as cut off rather than as standing on something.
         const HEIGHT_SHARE = 0.58;
-        const GROUND_SHARE = 0.26;
+        const GROUND_SHARE = 0.31;
 
         fit = () => {
           const vFov = (camera.fov * Math.PI) / 180;
