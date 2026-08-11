@@ -154,12 +154,14 @@ export function Mcp() {
 
           <CommandBlock
             label="Try it"
-            command={`curl -X POST ${endpoint} \\
+            command={`curl -i -X POST ${endpoint} \\
   -H 'Authorization: Bearer <token>' \\
   -H 'Content-Type: application/json' \\
   -H 'Accept: application/json, text/event-stream' \\
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`}
-            note="Lists the tools. Both Accept types are required by the Streamable HTTP transport."
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+        "protocolVersion":"2024-11-05","capabilities":{},
+        "clientInfo":{"name":"curl","version":"1"}}}'`}
+            note="The session starts here: the reply carries an mcp-session-id header, and every later request must repeat it. Both Accept types are required by the transport, and a bare tools/list without a session is answered 400."
           />
 
           <CommandBlock
