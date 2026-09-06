@@ -1,26 +1,40 @@
 /**
  * Dependency licence inventory.
  *
- * Walks the installed tree — direct AND transitive, including nested
- * `node_modules` — reads each package's declared licence, and writes
+ * Reads `package-lock.json` — not the installed `node_modules` — and writes
  * THIRD-PARTY-NOTICES.md.
+ *
+ * ============================================================================
+ * THE LOCKFILE, BECAUSE `node_modules` IS NOT THE SAME ON TWO MACHINES.
+ * ============================================================================
+ *
+ * An earlier version walked the installed tree, and CI caught the flaw: npm
+ * installs platform-specific optional dependencies, so a macOS checkout has
+ * `lightningcss-darwin-x64` where a Linux runner has `lightningcss-linux-x64`.
+ * The generated file therefore differed by platform, and `--check` failed on
+ * every CI run for a reason that had nothing to do with licences.
+ *
+ * The lockfile is committed, platform-independent, and pins every package for
+ * every platform — including the ones this machine did not install. That makes
+ * the report both deterministic and MORE complete than the installed tree.
  *
  * Written here rather than pulled in as a dependency for the same reason as
  * `scan-secrets.ts`: adding a licence-checking package to audit the licences
  * of packages is a circularity that also makes the project less
- * clone-and-run. Node's filesystem API is entirely sufficient.
+ * clone-and-run. Reading one JSON file is entirely sufficient.
  *
  *   npm run licenses         # rewrite THIRD-PARTY-NOTICES.md
  *   npm run licenses:check   # fail if it is out of date, or a licence is
  *                            # unknown / incompatible with MIT redistribution
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = join(ROOT, 'THIRD-PARTY-NOTICES.md');
+const LOCKFILE = join(ROOT, 'package-lock.json');
 
 interface Entry {
   readonly name: string;
@@ -60,51 +74,67 @@ function isIncompatible(license: string): boolean {
   );
 }
 
-function declaredLicense(pkg: Record<string, unknown>): string {
-  const license = pkg['license'];
+function declaredLicense(pkg: { readonly license?: unknown; readonly licenses?: unknown }): string {
+  const license = pkg.license;
   if (typeof license === 'string' && license.trim().length > 0) return license.trim();
   if (license !== null && typeof license === 'object' && 'type' in license) {
     const { type } = license;
     return typeof type === 'string' ? type : 'UNKNOWN';
   }
   // The deprecated `licenses` array, still present in a few old packages.
-  const legacy = pkg['licenses'];
+  const legacy = pkg.licenses;
   if (Array.isArray(legacy)) {
     return legacy.map((l: { type?: string }) => l.type ?? 'UNKNOWN').join(' OR ');
   }
   return 'UNKNOWN';
 }
 
-function collect(dir: string, into: Map<string, Entry>): void {
-  if (!existsSync(dir)) return;
+/** One `packages` entry from an npm lockfile (v2/v3). */
+interface LockEntry {
+  readonly version?: unknown;
+  readonly license?: unknown;
+  readonly licenses?: unknown;
+  /** True for a workspace symlink, which is this repo's own code. */
+  readonly link?: unknown;
+  readonly name?: unknown;
+}
 
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const path = join(dir, entry.name);
+/**
+ * The package name for a lockfile path.
+ *
+ * Paths are `node_modules/foo`, `node_modules/@scope/foo`, and for a
+ * version conflict `node_modules/a/node_modules/b` — so the name is whatever
+ * follows the LAST `node_modules/`.
+ */
+function nameFromPath(path: string): string | undefined {
+  const marker = 'node_modules/';
+  const index = path.lastIndexOf(marker);
+  if (index === -1) return undefined;
+  const name = path.slice(index + marker.length);
+  return name.length > 0 ? name : undefined;
+}
 
-    // Scoped packages nest one level deeper: @scope/name.
-    if (entry.name.startsWith('@')) {
-      collect(path, into);
-      continue;
-    }
-    if (entry.name === '.bin') continue;
+function collect(into: Map<string, Entry>): void {
+  if (!existsSync(LOCKFILE)) {
+    console.error('package-lock.json not found. Run `npm install` first.');
+    process.exit(1);
+  }
 
-    try {
-      const pkg = JSON.parse(readFileSync(join(path, 'package.json'), 'utf8')) as Record<
-        string,
-        unknown
-      >;
-      // Read defensively: a package.json in the wild may carry any type here,
-      // and a directory name is a better fallback than "[object Object]".
-      const name = typeof pkg['name'] === 'string' ? pkg['name'] : entry.name;
-      const version = typeof pkg['version'] === 'string' ? pkg['version'] : '0.0.0';
-      into.set(`${name}@${version}`, { name, version, license: declaredLicense(pkg) });
-    } catch {
-      // Not a package directory. Keep walking.
-    }
+  const lock = JSON.parse(readFileSync(LOCKFILE, 'utf8')) as {
+    packages?: Record<string, LockEntry>;
+  };
 
-    // Nested dependencies, which npm creates on a version conflict.
-    collect(join(path, 'node_modules'), into);
+  for (const [path, entry] of Object.entries(lock.packages ?? {})) {
+    // The root project ("") and workspace links are this repository's own
+    // code, covered by LICENSE rather than by a third-party notice.
+    if (path === '') continue;
+    if (entry.link === true) continue;
+
+    const name = nameFromPath(path);
+    if (name === undefined) continue;
+
+    const version = typeof entry.version === 'string' ? entry.version : '0.0.0';
+    into.set(`${name}@${version}`, { name, version, license: declaredLicense(entry) });
   }
 }
 
@@ -141,11 +171,15 @@ function render(entries: readonly Entry[]): string {
 
 This project is distributed under the MIT licence (see [\`LICENSE\`](LICENSE)).
 It bundles no third-party source: every entry below is an npm dependency
-resolved at install time, listed here so the full obligation set is visible
+pinned by the lockfile, listed here so the full obligation set is visible
 without running a tool.
 
 **${entries.length} packages** across the production and development trees,
-including transitive dependencies and nested duplicates.
+including transitive dependencies, nested duplicates, and the
+platform-specific optional dependencies this machine did not install.
+
+Derived from \`package-lock.json\` rather than the installed \`node_modules\`,
+so the inventory is identical on every platform and in CI.
 
 ## Summary
 
@@ -155,10 +189,11 @@ ${summary}
 
 Every licence above permits redistribution under MIT terms.
 
-\`MPL-2.0\` (\`lightningcss\`, a transitive dependency of the frontend build
-toolchain) is file-level copyleft: shipping the package unmodified alongside
-MIT code is permitted, and nothing here modifies its sources. It is a
-build-time dependency and does not appear in the shipped bundle.
+\`MPL-2.0\` is \`lightningcss\` and its 23 per-platform native binaries, a
+transitive dependency of the frontend build toolchain. MPL is FILE-level
+copyleft: shipping the package unmodified alongside MIT code is permitted, and
+nothing here modifies its sources. It is a build-time dependency and does not
+appear in the shipped bundle.
 
 \`Python-2.0\` (\`argparse\`) and \`CC0-1.0\` (\`mdn-data\`) are likewise
 permissive for this use.
@@ -180,11 +215,11 @@ function main(): void {
   const check = process.argv.includes('--check');
 
   const entries = new Map<string, Entry>();
-  collect(join(ROOT, 'node_modules'), entries);
+  collect(entries);
 
   const list = [...entries.values()];
   if (list.length === 0) {
-    console.error('No packages found. Run `npm install` first.');
+    console.error('package-lock.json lists no packages.');
     process.exit(1);
   }
 

@@ -39,7 +39,8 @@
     "verify": "npm run typecheck && npm run lint && npm run secrets:scan && npm run licenses:check && npm test && npm run test:frontend",
     "licenses": "tsx scripts/license-report.ts",
     "licenses:check": "tsx scripts/license-report.ts --check",
-    "generate:check": "tsx scripts/generate-all.ts --check"
+    "generate:check": "tsx scripts/generate-all.ts --check",
+    "verify:oauth": "tsx scripts/verify-oauth.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

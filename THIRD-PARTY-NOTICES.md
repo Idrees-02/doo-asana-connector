@@ -6,22 +6,26 @@
 
 This project is distributed under the MIT licence (see [`LICENSE`](LICENSE)).
 It bundles no third-party source: every entry below is an npm dependency
-resolved at install time, listed here so the full obligation set is visible
+pinned by the lockfile, listed here so the full obligation set is visible
 without running a tool.
 
-**447 packages** across the production and development trees,
-including transitive dependencies and nested duplicates.
+**516 packages** across the production and development trees,
+including transitive dependencies, nested duplicates, and the
+platform-specific optional dependencies this machine did not install.
+
+Derived from `package-lock.json` rather than the installed `node_modules`,
+so the inventory is identical on every platform and in CI.
 
 ## Summary
 
 | Licence | Packages |
 | --- | --- |
-| `MIT` | 375 |
+| `MIT` | 424 |
 | `ISC` | 25 |
+| `MPL-2.0` | 24 |
 | `Apache-2.0` | 20 |
 | `BSD-2-Clause` | 10 |
 | `BSD-3-Clause` | 5 |
-| `MPL-2.0` | 4 |
 | `BlueOak-1.0.0` | 2 |
 | `MIT-0` | 2 |
 | `(MIT OR CC0-1.0)` | 1 |
@@ -31,10 +35,11 @@ including transitive dependencies and nested duplicates.
 
 Every licence above permits redistribution under MIT terms.
 
-`MPL-2.0` (`lightningcss`, a transitive dependency of the frontend build
-toolchain) is file-level copyleft: shipping the package unmodified alongside
-MIT code is permitted, and nothing here modifies its sources. It is a
-build-time dependency and does not appear in the shipped bundle.
+`MPL-2.0` is `lightningcss` and its 23 per-platform native binaries, a
+transitive dependency of the frontend build toolchain. MPL is FILE-level
+copyleft: shipping the package unmodified alongside MIT code is permitted, and
+nothing here modifies its sources. It is a build-time dependency and does not
+appear in the shipped bundle.
 
 `Python-2.0` (`argparse`) and `CC0-1.0` (`mdn-data`) are likewise
 permissive for this use.
@@ -172,7 +177,32 @@ the connector — no source file referenced them — and have been removed.
 | `@csstools/css-color-parser` | 4.1.10 |
 | `@csstools/css-parser-algorithms` | 4.0.0 |
 | `@csstools/css-tokenizer` | 4.0.0 |
+| `@esbuild/aix-ppc64` | 0.28.2 |
+| `@esbuild/android-arm` | 0.28.2 |
+| `@esbuild/android-arm64` | 0.28.2 |
+| `@esbuild/android-x64` | 0.28.2 |
+| `@esbuild/darwin-arm64` | 0.28.2 |
 | `@esbuild/darwin-x64` | 0.28.2 |
+| `@esbuild/freebsd-arm64` | 0.28.2 |
+| `@esbuild/freebsd-x64` | 0.28.2 |
+| `@esbuild/linux-arm` | 0.28.2 |
+| `@esbuild/linux-arm64` | 0.28.2 |
+| `@esbuild/linux-ia32` | 0.28.2 |
+| `@esbuild/linux-loong64` | 0.28.2 |
+| `@esbuild/linux-mips64el` | 0.28.2 |
+| `@esbuild/linux-ppc64` | 0.28.2 |
+| `@esbuild/linux-riscv64` | 0.28.2 |
+| `@esbuild/linux-s390x` | 0.28.2 |
+| `@esbuild/linux-x64` | 0.28.2 |
+| `@esbuild/netbsd-arm64` | 0.28.2 |
+| `@esbuild/netbsd-x64` | 0.28.2 |
+| `@esbuild/openbsd-arm64` | 0.28.2 |
+| `@esbuild/openbsd-x64` | 0.28.2 |
+| `@esbuild/openharmony-arm64` | 0.28.2 |
+| `@esbuild/sunos-x64` | 0.28.2 |
+| `@esbuild/win32-arm64` | 0.28.2 |
+| `@esbuild/win32-ia32` | 0.28.2 |
+| `@esbuild/win32-x64` | 0.28.2 |
 | `@eslint-community/eslint-utils` | 4.10.1 |
 | `@eslint-community/regexpp` | 4.12.2 |
 | `@eslint/js` | 10.0.1 |
@@ -238,12 +268,36 @@ the connector — no source file referenced them — and have been removed.
 | `@radix-ui/rect` | 1.1.3 |
 | `@readme/openapi-parser` | 9.0.0 |
 | `@readme/openapi-schemas` | 4.0.0 |
+| `@rolldown/binding-android-arm64` | 1.2.3 |
+| `@rolldown/binding-darwin-arm64` | 1.2.3 |
 | `@rolldown/binding-darwin-x64` | 1.2.3 |
+| `@rolldown/binding-freebsd-x64` | 1.2.3 |
+| `@rolldown/binding-linux-arm-gnueabihf` | 1.2.3 |
+| `@rolldown/binding-linux-arm64-gnu` | 1.2.3 |
+| `@rolldown/binding-linux-arm64-musl` | 1.2.3 |
+| `@rolldown/binding-linux-ppc64-gnu` | 1.2.3 |
+| `@rolldown/binding-linux-s390x-gnu` | 1.2.3 |
+| `@rolldown/binding-linux-x64-gnu` | 1.2.3 |
+| `@rolldown/binding-linux-x64-musl` | 1.2.3 |
+| `@rolldown/binding-openharmony-arm64` | 1.2.3 |
+| `@rolldown/binding-win32-arm64-msvc` | 1.2.3 |
+| `@rolldown/binding-win32-x64-msvc` | 1.2.3 |
 | `@rolldown/pluginutils` | 1.0.1 |
 | `@standard-schema/spec` | 1.1.0 |
 | `@tailwindcss/node` | 4.3.3 |
 | `@tailwindcss/oxide` | 4.3.3 |
+| `@tailwindcss/oxide-android-arm64` | 4.3.3 |
+| `@tailwindcss/oxide-darwin-arm64` | 4.3.3 |
 | `@tailwindcss/oxide-darwin-x64` | 4.3.3 |
+| `@tailwindcss/oxide-freebsd-x64` | 4.3.3 |
+| `@tailwindcss/oxide-linux-arm-gnueabihf` | 4.3.3 |
+| `@tailwindcss/oxide-linux-arm64-gnu` | 4.3.3 |
+| `@tailwindcss/oxide-linux-arm64-musl` | 4.3.3 |
+| `@tailwindcss/oxide-linux-x64-gnu` | 4.3.3 |
+| `@tailwindcss/oxide-linux-x64-musl` | 4.3.3 |
+| `@tailwindcss/oxide-wasm32-wasi` | 4.3.3 |
+| `@tailwindcss/oxide-win32-arm64-msvc` | 4.3.3 |
+| `@tailwindcss/oxide-win32-x64-msvc` | 4.3.3 |
 | `@tailwindcss/vite` | 4.3.3 |
 | `@tanstack/query-core` | 5.101.4 |
 | `@tanstack/react-query` | 5.101.4 |
@@ -547,8 +601,28 @@ the connector — no source file referenced them — and have been removed.
 | --- | --- |
 | `lightningcss` | 1.32.0 |
 | `lightningcss` | 1.33.0 |
+| `lightningcss-android-arm64` | 1.32.0 |
+| `lightningcss-android-arm64` | 1.33.0 |
+| `lightningcss-darwin-arm64` | 1.32.0 |
+| `lightningcss-darwin-arm64` | 1.33.0 |
 | `lightningcss-darwin-x64` | 1.32.0 |
 | `lightningcss-darwin-x64` | 1.33.0 |
+| `lightningcss-freebsd-x64` | 1.32.0 |
+| `lightningcss-freebsd-x64` | 1.33.0 |
+| `lightningcss-linux-arm-gnueabihf` | 1.32.0 |
+| `lightningcss-linux-arm-gnueabihf` | 1.33.0 |
+| `lightningcss-linux-arm64-gnu` | 1.32.0 |
+| `lightningcss-linux-arm64-gnu` | 1.33.0 |
+| `lightningcss-linux-arm64-musl` | 1.32.0 |
+| `lightningcss-linux-arm64-musl` | 1.33.0 |
+| `lightningcss-linux-x64-gnu` | 1.32.0 |
+| `lightningcss-linux-x64-gnu` | 1.33.0 |
+| `lightningcss-linux-x64-musl` | 1.32.0 |
+| `lightningcss-linux-x64-musl` | 1.33.0 |
+| `lightningcss-win32-arm64-msvc` | 1.32.0 |
+| `lightningcss-win32-arm64-msvc` | 1.33.0 |
+| `lightningcss-win32-x64-msvc` | 1.32.0 |
+| `lightningcss-win32-x64-msvc` | 1.33.0 |
 
 ### Python-2.0
 
