@@ -111,6 +111,21 @@ staying set rather than on the process refusing to start.
   covered by `tests/unit/oauth.test.ts` against a fetch double that mirrors
   Asana's token-endpoint contract. **The PAT path is verified end to end;
   OAuth is verified up to, but not including, interactive consent.**
+
+  Everything before the click is now checked against the real provider by
+  `npm run verify:oauth` (15/15 on 2026-09-06): the request shape, the PKCE
+  challenge recomputed independently against RFC 7636, that Asana *accepts*
+  the client id / redirect URI / scope list rather than returning
+  `invalid_client`, `redirect_uri_mismatch` or `invalid_scope`, and that
+  `state` is single-use.
+
+  To close the remaining step yourself, `npm run oauth:connect` runs the
+  guided flow and then calls `testConnection` with the resulting token —
+  because a stored token that cannot call Asana is not a connection. Note
+  that a PAT takes precedence over OAuth, so `ASANA_ACCESS_TOKEN` must be
+  unset for the OAuth credential to actually be used; the script refuses to
+  proceed otherwise rather than letting you complete a flow whose result is
+  ignored.
 - **The 30 extended actions were not re-run live in this pass.** They are
   exercised end to end through the same real client, validation and
   error-handling path against the in-memory Asana API.

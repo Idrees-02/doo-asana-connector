@@ -134,7 +134,28 @@ pre-shared token.
    ASANA_OAUTH_REDIRECT_URI=http://localhost:8787/api/auth/oauth/callback
    ```
 
-5. Restart, then use **Settings → Connect with Asana**.
+5. Connect. Either use **Settings → Connect with Asana** in the console, or
+   run the guided flow:
+
+   ```bash
+   npm run oauth:connect
+   ```
+
+   It prints the URL to open, waits for Asana's redirect, then proves the
+   resulting token works by calling `testConnection` with it.
+
+   > **A PAT takes precedence over OAuth.** If `ASANA_ACCESS_TOKEN` is set,
+   > the connector keeps using it and a successful OAuth connection is
+   > silently ignored. `npm run oauth:connect` checks for this and refuses
+   > rather than letting you complete a flow whose result is discarded —
+   > comment the PAT out first to exercise the OAuth path.
+
+   To check everything *before* the consent click, against the real Asana
+   authorization endpoint:
+
+   ```bash
+   npm run verify:oauth
+   ```
 
 Scopes requested (least privilege — nothing more than the five actions need):
 
@@ -395,6 +416,8 @@ externally unverified.
 | `npm run licenses` | Regenerate `THIRD-PARTY-NOTICES.md` |
 | `npm run licenses:check` | Fail on an unknown/copyleft licence or stale notices |
 | `npm run setup` | Interactive .env setup — hidden token input, verifies the connection |
+| `npm run verify:oauth` | Live-check the OAuth flow up to the consent click (PKCE, scopes, state) |
+| `npm run oauth:connect` | Guided consent flow, then verifies the resulting token |
 | `npm run smoke:live` | Read-only check against real Asana (needs a PAT) |
 | `npm run smoke:live -- --writes` | Also exercises create/update/comment |
 | `npx tsx examples/use-connector.ts` | Use the connector as a library |
