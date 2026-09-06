@@ -157,7 +157,25 @@ export async function buildAuthorizationUrl(
   url.searchParams.set('state', state);
   url.searchParams.set('code_challenge_method', 'S256');
   url.searchParams.set('code_challenge', codeChallenge);
-  url.searchParams.set('scope', config.scopes.join(' '));
+  /*
+   * `scope` is OPTIONAL in RFC 6749, and omitting it is NOT the same as
+   * sending an empty one. Asana treats an absent scope as "the app's default
+   * permissions"; `scope=` is a request for no scopes at all, which is either
+   * rejected or silently useless.
+   *
+   * This matters because Asana's granular scopes (`tasks:read` and friends)
+   * have to be enabled per-app in the developer console. An app that has not
+   * opted in answers a granular request with:
+   *
+   *   forbidden_scopes: Your app is not allowed to request user
+   *   authorization for `...` scopes.
+   *
+   * Clearing ASANA_OAUTH_SCOPES is the documented way out of that, so the
+   * empty case has to produce a valid request rather than a broken one.
+   */
+  if (config.scopes.length > 0) {
+    url.searchParams.set('scope', config.scopes.join(' '));
+  }
 
   return { url: url.toString(), state };
 }

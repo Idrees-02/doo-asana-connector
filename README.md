@@ -169,6 +169,13 @@ Scopes requested (least privilege — nothing more than the five actions need):
 projects:read  tasks:read  tasks:write  stories:write  users:read  workspaces:read
 ```
 
+> **If you get `forbidden_scopes`:** Asana's granular scopes have to be
+> enabled per-app in the developer console, and apps do not have them by
+> default. Either enable them on your app at
+> <https://app.asana.com/0/my-apps>, or set `ASANA_OAUTH_SCOPES=` (blank) in
+> `.env` — blank omits the `scope` parameter entirely and asks for the app's
+> default permissions, which is Asana's documented fallback.
+
 ### Recommended: a sandbox workspace
 
 Before running any write action, create a throwaway project (e.g. *Connector

@@ -27,6 +27,7 @@ import {
 } from '../../src/auth/oauth.js';
 import { OAuthCredentialProvider, PatCredentialProvider } from '../../src/auth/providers.js';
 import { MemoryCredentialStore } from '../../src/auth/credential-store.js';
+import { buildConfig } from '../../src/config.js';
 import { AsanaClient } from '../../src/client.js';
 import { ConnectorError } from '../../src/errors/ConnectorError.js';
 import type { OAuthConfig } from '../../src/config.js';
@@ -391,5 +392,71 @@ describe('PAT takes priority over OAuth when both are configured', () => {
     // that rule cannot silently flip during a refactor.
     const pat = new PatCredentialProvider('1/123:abc');
     expect(pat.type).toBe('pat');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Scope parameter                                                             */
+/* -------------------------------------------------------------------------- */
+
+describe('the scope parameter', () => {
+  /**
+   * Asana's granular scopes must be enabled per-app in the developer console.
+   * An app that has not opted in rejects the entire flow:
+   *
+   *   forbidden_scopes: Your app is not allowed to request user
+   *   authorization for `tasks:read ...` scopes.
+   *
+   * Clearing ASANA_OAUTH_SCOPES is the documented way out of that, so the
+   * empty case has to produce a request Asana will actually accept.
+   */
+  it('is OMITTED entirely when no scopes are configured', async () => {
+    const config = buildConfig({
+      ASANA_OAUTH_CLIENT_ID: 'client-id',
+      ASANA_OAUTH_CLIENT_SECRET: 'client-secret', // secrets-scan-ignore
+      ASANA_OAUTH_SCOPES: '',
+    });
+
+    const { url } = await buildAuthorizationUrl(config.oauth!, new AuthorizationStateStore());
+    const params = new URL(url).searchParams;
+
+    // `scope=` is a request for NO scopes, which is not what "unset" means.
+    // Omitting it asks for the app's default permissions.
+    expect(params.has('scope')).toBe(false);
+  });
+
+  it('sends exactly the configured scopes when they are set', async () => {
+    const config = buildConfig({
+      ASANA_OAUTH_CLIENT_ID: 'client-id',
+      ASANA_OAUTH_CLIENT_SECRET: 'client-secret', // secrets-scan-ignore
+      ASANA_OAUTH_SCOPES: 'tasks:read projects:read',
+    });
+
+    const { url } = await buildAuthorizationUrl(config.oauth!, new AuthorizationStateStore());
+
+    expect(new URL(url).searchParams.get('scope')).toBe('tasks:read projects:read');
+  });
+
+  it('accepts Asana\'s full-permission "default" scope', async () => {
+    const config = buildConfig({
+      ASANA_OAUTH_CLIENT_ID: 'client-id',
+      ASANA_OAUTH_CLIENT_SECRET: 'client-secret', // secrets-scan-ignore
+      ASANA_OAUTH_SCOPES: 'default',
+    });
+
+    const { url } = await buildAuthorizationUrl(config.oauth!, new AuthorizationStateStore());
+
+    expect(new URL(url).searchParams.get('scope')).toBe('default');
+  });
+
+  it('never requests a delete scope, whatever is configured', () => {
+    const config = buildConfig({
+      ASANA_OAUTH_CLIENT_ID: 'client-id',
+      ASANA_OAUTH_CLIENT_SECRET: 'client-secret', // secrets-scan-ignore
+    });
+
+    // The default list is least-privilege: this connector has no delete
+    // action, so it must never ask for the permission to delete.
+    expect(config.oauth?.scopes.some((s) => s.includes('delete'))).toBe(false);
   });
 });

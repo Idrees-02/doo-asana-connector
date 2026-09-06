@@ -64,6 +64,16 @@ const envSchema = z.object({
     .string()
     .trim()
     .catch('http://localhost:8787/api/auth/oauth/callback'),
+  /*
+   * OAuth scopes requested at authorization.
+   *
+   * Asana's granular scopes must be enabled per-app in the developer console.
+   * An app that has not opted in rejects the whole flow with
+   * `forbidden_scopes`. Setting this to blank omits the `scope` parameter
+   * entirely, which asks Asana for the app's default permissions — the
+   * documented escape hatch, and the reason blank has to remain a valid,
+   * meaningful value rather than a misconfiguration.
+   */
   ASANA_OAUTH_SCOPES: z
     .string()
     .trim()
