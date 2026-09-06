@@ -414,7 +414,7 @@ Live results below are from **6 September 2026**; see
 | Versioned v1.0.0 | Yes |
 | **Real sandbox/test-account flow** | **Verified 2026-09-06** — required 5 actions live end-to-end (9/9), including idempotency replay creating no duplicate |
 | **MCP endpoint driving live Asana** | **Verified 2026-09-06** — authenticated Streamable HTTP session, 35 tools listed, `asana_list_projects` returned live data, unapproved write refused |
-| **OAuth interactive consent** | **Verified 2026-09-06** — real login, consent granted, code exchanged, `testConnection` succeeded on the OAuth credential (740 ms). Refresh/revoke covered by tests against a contract-accurate double |
+| **OAuth 2.0, end to end** | **Verified live 2026-09-06, 11/11** — consent with a real login, code exchange, encrypted persistence, decryption by a fresh process, token refresh, and revocation confirmed by Asana rejecting the revoked token |
 | **HTTPS MCP endpoint deployed** | **Deployed** — `https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp`, HTTPS, returns 401 unauthenticated |
 
 See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) for what remains

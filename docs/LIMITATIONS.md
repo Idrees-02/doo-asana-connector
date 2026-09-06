@@ -135,46 +135,31 @@ the consent flow above produced.
 
 **The OAuth path is verified end to end**: authorization, PKCE, consent, code
 exchange, encrypted persistence, decryption by a fresh process, an
-authenticated Asana call, and a real token refresh.
+authenticated Asana call, a real token refresh, and revocation — every step
+executed against the live provider (`npm run verify:oauth:lifecycle`, 11/11).
 
-#### Revocation is NOT yet confirmed live
+#### Revocation — confirmed live, after a real bug was found and fixed
 
-The same run attempted revocation and it failed. `revokeToken` returned false
-and the token still worked afterwards.
+| Check | Result |
+| --- | --- |
+| Asana accepted the revocation | **HTTP 200** |
+| The revoked token no longer works | **`ASANA_AUTHENTICATION_ERROR`** — confirmed by asking Asana, not by trusting the 200 |
+| Local credential cleared | Disconnected |
 
-Investigated: the request shape is correct — Asana's `/-/oauth_revoke`
-answers **200** to the exact body the connector sends (verified directly, and
-to two alternative shapes besides), and `revokeToken` returns true against it.
-The live failure was not reproducible.
+Getting here found a defect that had been shipping silently: the connector
+revoked the **access** token, and Asana answers a real access token with
+`400 unsupported_token_type` — RFC 7009's "the authorization server does not
+support revocation of the presented token type". Disconnect therefore cleared
+the local credential while leaving a live token in Asana that nobody knew
+about.
 
-What the investigation did find is a real defect, now fixed: `revokeToken`
-swallowed the reason in a bare `catch {}` and returned `false`, so a failure
-carried no status, no error, and no way to tell an unreachable network from a
-rejected request. It now returns `{ revoked, httpStatus, reason }`, the
-disconnect route logs the reason and reports it, and four tests cover the
-failure modes.
+It survived because the revoke endpoint answers **200 to a token it does not
+recognise**, so every test against a made-up string passed, and one test
+actively asserted the buggy behaviour. Only a live credential could expose it.
 
-**Revocation therefore remains covered by tests against a contract-accurate
-double, and unconfirmed against the live provider.** Stated plainly rather
-than rounded up, since one live attempt failed and the cause is unknown.
-
-#### The granted scopes were `default identity`, not the least-privilege list
-
-Worth stating precisely, because it differs from what the connector requests
-by default.
-
-Asana's **granular** scopes (`tasks:read` and friends) must be enabled per-app
-in the developer console. This app has not opted in, so requesting them was
-rejected with `forbidden_scopes`, and the verified session ran with
-`ASANA_OAUTH_SCOPES` blank — which omits the `scope` parameter and asks for
-the app's default permissions. Asana granted `default identity`, i.e. **full
-permissions for the authorizing user**, not the six-scope least-privilege set.
-
-So: the connector *requests* least privilege and never asks for a delete
-scope, and a test enforces that. But whether least privilege is actually
-*applied* depends on the Asana app being configured for granular scopes. On an
-app that is not, OAuth is as broad as a PAT. Enable the scopes at
-app.asana.com/0/my-apps to close that gap.
+Fixed: the refresh token is revoked with `token_type_hint=refresh_token`,
+which invalidates the whole grant, falling back to the access token only when
+no refresh token was issued.
 
 ### NOT independently verified
 - **The 30 extended actions were not re-run live in this pass.** They are
