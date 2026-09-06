@@ -31,6 +31,15 @@ authentication:
   notes: A Personal Access Token carries the full permissions of its creating user; Asana does not
     scope PATs. OAuth 2.0 supports the granular scopes listed above and is preferred for multi-user
     deployments.
+deployment:
+  deployedUrl: https://doo-asana-connectorfrontend-production-80e4.up.railway.app
+  mcpEndpoint: https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp
+  healthUrl: https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp/health
+  repository: https://github.com/Idrees-02/doo-asana-connector
+  mcpAuthRequired: true
+  notes: Live on Railway in live mode against a real Asana workspace. The MCP endpoint returns 401
+    without a bearer token, and the server refuses to start in production without MCP_AUTH_TOKEN.
+    See docs/VERIFICATION.md for the captured walkthrough.
 capabilities:
   pagination: cursor
   rateLimiting: true

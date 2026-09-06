@@ -38,6 +38,26 @@ export interface ConnectorManifest {
   readonly description: string;
   readonly builder: string;
   readonly category: string;
+  /**
+   * Where this connector is actually running.
+   *
+   * Declared in the manifest rather than left to prose in the README,
+   * because a reviewer — or a tool — reading the manifest should not have to
+   * infer whether the thing is deployed. `deployedUrl` being null is a
+   * meaningful statement; so is it being populated.
+   */
+  readonly deployment: {
+    /** The live console, or null when nothing is deployed. */
+    readonly deployedUrl: string | null;
+    /** Streamable HTTP MCP endpoint. Requires `Authorization: Bearer`. */
+    readonly mcpEndpoint: string | null;
+    /** Unauthenticated liveness probe, so a platform check needs no credential. */
+    readonly healthUrl: string | null;
+    readonly repository: string;
+    /** Whether the deployed MCP endpoint refuses anonymous callers. */
+    readonly mcpAuthRequired: boolean;
+    readonly notes: string;
+  };
   readonly authentication: {
     readonly types: readonly ['pat', 'oauth2'];
     readonly default: 'pat';
@@ -129,6 +149,17 @@ export function buildManifest(): ConnectorManifest {
       revokeUrl: 'https://app.asana.com/-/oauth_revoke',
       notes:
         'A Personal Access Token carries the full permissions of its creating user; Asana does not scope PATs. OAuth 2.0 supports the granular scopes listed above and is preferred for multi-user deployments.',
+    },
+    deployment: {
+      deployedUrl: 'https://doo-asana-connectorfrontend-production-80e4.up.railway.app',
+      mcpEndpoint: 'https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp',
+      healthUrl: 'https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp/health',
+      repository: 'https://github.com/Idrees-02/doo-asana-connector',
+      mcpAuthRequired: true,
+      notes:
+        'Live on Railway in live mode against a real Asana workspace. The MCP endpoint returns ' +
+        '401 without a bearer token, and the server refuses to start in production without ' +
+        'MCP_AUTH_TOKEN. See docs/VERIFICATION.md for the captured walkthrough.',
     },
     capabilities: {
       pagination: 'cursor',

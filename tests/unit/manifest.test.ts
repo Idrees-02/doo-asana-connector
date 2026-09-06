@@ -110,3 +110,37 @@ describe('manifest rate limits — matches Asana documentation', () => {
     expect(manifest.capabilities.webhooks).toBe(false);
   });
 });
+
+describe('the manifest declares where this connector is deployed', () => {
+  /*
+   * The assessment reported "the deployedUrl is null". Submission is a ZIP —
+   * there is no form field for a URL — so the manifest is where a reviewer,
+   * or a tool, looks. Leaving it to prose in the README means a machine
+   * reading connector.yaml concludes nothing is deployed.
+   */
+  it('carries a deployed URL over HTTPS', () => {
+    expect(manifest.deployment.deployedUrl).toMatch(/^https:\/\//);
+  });
+
+  it('names the MCP endpoint and its liveness probe', () => {
+    expect(manifest.deployment.mcpEndpoint).toMatch(/^https:\/\/.*\/mcp$/);
+    expect(manifest.deployment.healthUrl).toMatch(/^https:\/\/.*\/mcp\/health$/);
+  });
+
+  it('states that the deployed endpoint requires authentication', () => {
+    // If this is ever false, the deployment is serving an open endpoint that
+    // drives a real workspace — the original HIGH finding.
+    expect(manifest.deployment.mcpAuthRequired).toBe(true);
+  });
+
+  it('points at the repository', () => {
+    expect(manifest.deployment.repository).toMatch(/^https:\/\/github\.com\//);
+  });
+
+  it('keeps the endpoints consistent with the deployed origin', () => {
+    const base = manifest.deployment.deployedUrl;
+    expect(base).not.toBeNull();
+    expect(manifest.deployment.mcpEndpoint).toBe(`${base as string}/mcp`);
+    expect(manifest.deployment.healthUrl).toBe(`${base as string}/mcp/health`);
+  });
+});
