@@ -115,7 +115,7 @@ async function main(): Promise<void> {
   console.log('\n3. Revocation — handing the token to Asana and confirming it dies\n');
 
   const live = (await store.get()) as OAuthCredentials;
-  const result = await revokeToken(config.oauth, live.accessToken);
+  const result = await revokeToken(config.oauth, live);
   check(
     'Asana accepted the revocation',
     result.revoked,

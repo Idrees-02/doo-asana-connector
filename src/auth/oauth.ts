@@ -257,19 +257,43 @@ export interface RevocationResult {
   readonly reason: string;
 }
 
+/** The subset of a credential revocation needs. */
+export interface RevocableCredentials {
+  readonly accessToken: string;
+  readonly refreshToken?: string | undefined;
+}
+
 /**
  * Best-effort revocation. Used on disconnect.
  *
- * Asana's revoke endpoint answers 200 even for a token it does not recognise
- * (RFC 7009 requires exactly that), so a 200 means "this token is now
- * invalid", not "this token existed".
+ * ============================================================================
+ * ASANA REVOKES THE REFRESH TOKEN, NOT THE ACCESS TOKEN.
+ * ============================================================================
+ *
+ * This sent the access token and revocation silently never worked. Asana
+ * answers a real access token with:
+ *
+ *   400 {"error":"unsupported_token_type"}
+ *
+ * which is RFC 7009's "the authorization server does not support revocation
+ * of the presented token type". The bug survived because the endpoint answers
+ * 200 to a token it does not RECOGNISE at all — so every test against a
+ * made-up string passed, and only a live token exposed it.
+ *
+ * Revoking the refresh token invalidates the whole grant, access token
+ * included, which is what "disconnect" should mean. The access token is used
+ * only as a fallback when no refresh token was issued.
  */
 export async function revokeToken(
   config: OAuthConfig,
-  token: string,
+  credentials: RevocableCredentials,
   deps: OAuthExchangeDeps = {},
 ): Promise<RevocationResult> {
   const fetchImpl = deps.fetch ?? globalThis.fetch.bind(globalThis);
+
+  const refreshToken = credentials.refreshToken;
+  const useRefresh = refreshToken !== undefined;
+  const token = refreshToken ?? credentials.accessToken;
 
   let response: Response;
   try {
@@ -280,6 +304,9 @@ export async function revokeToken(
         client_id: config.clientId,
         client_secret: config.clientSecret,
         token,
+        // RFC 7009 says the server MAY use this to speed lookup; Asana uses
+        // it to decide whether it will revoke the token at all.
+        token_type_hint: useRefresh ? 'refresh_token' : 'access_token',
       }).toString(),
     });
   } catch (thrown) {

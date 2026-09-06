@@ -258,7 +258,7 @@ describe('OAuthCredentialProvider — end-to-end through a real client request',
       // secrets-scan-ignore: synthetic placeholder, not a real credential
       accessToken: 'valid-access-token',
       // secrets-scan-ignore: synthetic placeholder, not a real credential
-      refreshToken: 'refresh-token',
+      refreshToken: 'fake-refresh-token',
       expiresAt: Date.now() + 3600_000,
       scopes: CONFIG.scopes,
     });
@@ -289,7 +289,7 @@ describe('OAuthCredentialProvider — end-to-end through a real client request',
       // secrets-scan-ignore: synthetic placeholder, not a real credential
       accessToken: 'stale-token',
       // secrets-scan-ignore: synthetic placeholder, not a real credential
-      refreshToken: 'refresh-token',
+      refreshToken: 'fake-refresh-token',
       expiresAt: Date.now() + 10_000, // inside the 60s leeway
       scopes: CONFIG.scopes,
     });
@@ -318,7 +318,7 @@ describe('OAuthCredentialProvider — end-to-end through a real client request',
       // secrets-scan-ignore: synthetic placeholder, not a real credential
       accessToken: 'stale-token',
       // secrets-scan-ignore: synthetic placeholder, not a real credential
-      refreshToken: 'refresh-token',
+      refreshToken: 'fake-refresh-token',
       expiresAt: Date.now() + 10_000,
       scopes: CONFIG.scopes,
     });
@@ -368,16 +368,18 @@ describe('revokeToken and disconnect safety', () => {
       return Promise.resolve(new Response('{}', { status: 200 }));
     }) as typeof globalThis.fetch;
 
-    const { revoked: ok } = await revokeToken(CONFIG, 'token-to-revoke', { fetch: fetchImpl });
+    const { revoked: ok } = await revokeToken(CONFIG, { accessToken: 'fake-access-token-to-revoke', refreshToken: 'fake-refresh-token-to-revoke' }, { fetch: fetchImpl });
 
     expect(ok).toBe(true);
     expect(called?.url).toBe('https://app.asana.com/-/oauth_revoke');
-    expect(called?.token).toBe('token-to-revoke');
+    // The refresh token, not the access token — Asana rejects the latter with
+    // 400 unsupported_token_type. This assertion previously pinned the bug.
+    expect(called?.token).toBe('fake-refresh-token-to-revoke');
   });
 
   it('reports failure rather than throwing when Asana is unreachable', async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('network down'));
-    const { revoked: ok } = await revokeToken(CONFIG, 'token', { fetch: fetchImpl as unknown as typeof globalThis.fetch });
+    const { revoked: ok } = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, { fetch: fetchImpl as unknown as typeof globalThis.fetch });
 
     // Disconnect must still be able to proceed locally even if this returns false.
     expect(ok).toBe(false);
@@ -472,7 +474,7 @@ describe('revokeToken reports WHY it failed', () => {
     const fetchImpl = (): Promise<Response> =>
       Promise.resolve(new Response('{"error":"invalid_client"}', { status: 401, statusText: 'Unauthorized' }));
 
-    const result = await revokeToken(CONFIG, 'token', {
+    const result = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, {
       fetch: fetchImpl as unknown as typeof globalThis.fetch,
     });
 
@@ -484,7 +486,7 @@ describe('revokeToken reports WHY it failed', () => {
   it('reports a transport failure with a null status', async () => {
     const fetchImpl = (): Promise<Response> => Promise.reject(new Error('getaddrinfo ENOTFOUND'));
 
-    const result = await revokeToken(CONFIG, 'token', {
+    const result = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, {
       fetch: fetchImpl as unknown as typeof globalThis.fetch,
     });
 
@@ -497,7 +499,7 @@ describe('revokeToken reports WHY it failed', () => {
   it('reports success with the status, and no reason', async () => {
     const fetchImpl = (): Promise<Response> => Promise.resolve(new Response('{}', { status: 200 }));
 
-    const result = await revokeToken(CONFIG, 'token', {
+    const result = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, {
       fetch: fetchImpl as unknown as typeof globalThis.fetch,
     });
 
@@ -512,7 +514,7 @@ describe('revokeToken reports WHY it failed', () => {
         new Response('failed for Bearer abcdefghijklmnopqrstuvwxyz012345', { status: 400 }), // secrets-scan-ignore
       );
 
-    const result = await revokeToken(CONFIG, 'token', {
+    const result = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, {
       fetch: fetchImpl as unknown as typeof globalThis.fetch,
     });
 
@@ -520,5 +522,97 @@ describe('revokeToken reports WHY it failed', () => {
     // the same redaction as everything else.
     expect(result.reason).not.toContain('abcdefghijklmnopqrstuvwxyz012345');
     expect(result.reason).toContain('[REDACTED]');
+  });
+});
+
+describe('revokeToken sends the token Asana will actually accept', () => {
+  /*
+   * The bug this pins. The connector sent the ACCESS token, and Asana answers
+   * a real access token with 400 unsupported_token_type — RFC 7009's "the
+   * authorization server does not support revocation of the presented token
+   * type". Revocation therefore never worked in production.
+   *
+   * It survived because the endpoint answers 200 to a token it does not
+   * RECOGNISE, so every test against a made-up string passed. Only a live
+   * credential exposed it.
+   */
+  it('revokes the REFRESH token when one exists', async () => {
+    let sent: URLSearchParams | undefined;
+    const fetchImpl = (_url: string, init?: RequestInit): Promise<Response> => {
+      sent = new URLSearchParams(typeof init?.body === 'string' ? init.body : '');
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    };
+
+    const result = await revokeToken(
+      CONFIG,
+      { accessToken: 'fake-the-access-token', refreshToken: 'fake-the-refresh-token' },
+      { fetch: fetchImpl as unknown as typeof globalThis.fetch },
+    );
+
+    expect(result.revoked).toBe(true);
+    // Revoking the refresh token invalidates the whole grant, access token
+    // included — which is what "disconnect" should mean.
+    expect(sent?.get('token')).toBe('fake-the-refresh-token');
+    expect(sent?.get('token_type_hint')).toBe('refresh_token');
+    expect(sent?.get('token')).not.toBe('fake-the-access-token');
+  });
+
+  it('falls back to the access token when no refresh token was issued', async () => {
+    let sent: URLSearchParams | undefined;
+    const fetchImpl = (_url: string, init?: RequestInit): Promise<Response> => {
+      sent = new URLSearchParams(typeof init?.body === 'string' ? init.body : '');
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    };
+
+    await revokeToken(
+      CONFIG,
+      { accessToken: 'fake-the-access-token', refreshToken: undefined },
+      { fetch: fetchImpl as unknown as typeof globalThis.fetch },
+    );
+
+    expect(sent?.get('token')).toBe('fake-the-access-token');
+    expect(sent?.get('token_type_hint')).toBe('access_token');
+  });
+
+  it('always sends the client credentials Asana requires', async () => {
+    let sent: URLSearchParams | undefined;
+    const fetchImpl = (_url: string, init?: RequestInit): Promise<Response> => {
+      sent = new URLSearchParams(typeof init?.body === 'string' ? init.body : '');
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    };
+
+    await revokeToken(
+      CONFIG,
+      { accessToken: 'fake-a', refreshToken: 'fake-r' },
+      { fetch: fetchImpl as unknown as typeof globalThis.fetch },
+    );
+
+    expect(sent?.get('client_id')).toBe(CONFIG.clientId);
+    expect(sent?.get('client_secret')).toBe(CONFIG.clientSecret);
+  });
+
+  it('surfaces unsupported_token_type rather than hiding it', async () => {
+    // The exact response Asana gave for an access token, so a regression
+    // reproduces the original symptom.
+    const fetchImpl = (): Promise<Response> =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: 'unsupported_token_type',
+            error_description: 'The authorization server does not support this token type.',
+          }),
+          { status: 400, statusText: 'Bad Request' },
+        ),
+      );
+
+    const result = await revokeToken(
+      CONFIG,
+      { accessToken: 'fake-a', refreshToken: 'fake-r' },
+      { fetch: fetchImpl as unknown as typeof globalThis.fetch },
+    );
+
+    expect(result.revoked).toBe(false);
+    expect(result.httpStatus).toBe(400);
+    expect(result.reason).toContain('unsupported_token_type');
   });
 });

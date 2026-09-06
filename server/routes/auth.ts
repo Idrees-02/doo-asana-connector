@@ -98,7 +98,8 @@ export function registerAuthRoutes(app: Express, runtime: Bootstrapped): void {
       let reason = '';
 
       if (credentials?.type === 'oauth' && config.oauth !== undefined) {
-        const result = await revokeToken(config.oauth, credentials.accessToken);
+        // The whole credential: Asana revokes the refresh token, not the access one.
+        const result = await revokeToken(config.oauth, credentials);
         revoked = result.revoked;
         reason = result.reason;
         // Logged rather than discarded: a revocation that quietly fails leaves
