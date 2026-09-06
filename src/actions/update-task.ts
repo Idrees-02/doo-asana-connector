@@ -17,8 +17,21 @@
  *
  * 2. LOST UPDATES.
  *    Read-modify-write over HTTP has no concurrency control by default: two
- *    people editing the same task means the second write silently discards the
- *    first. `ifUnmodifiedSince` provides opt-in optimistic locking.
+ *    people editing the same task means the second write silently discards
+ *    the first. `ifUnmodifiedSince` provides an opt-in STALE-READ GUARD.
+ *
+ *    Named precisely, because the difference matters. It is NOT an atomic
+ *    compare-and-swap: Asana exposes no conditional-write primitive for tasks
+ *    — no ETag, no If-Match, no version field — so the connector issues GET
+ *    then PUT and compares `modified_at` in between. A writer that commits
+ *    inside that window is not detected, and `modified_at` is
+ *    millisecond-resolution, so an edit within the same millisecond as the
+ *    caller's read is indistinguishable from no edit.
+ *
+ *    It narrows the window from "the whole time the user had the form open"
+ *    to "one network round trip", which is a large and worthwhile reduction.
+ *    It does not close it, and docs/WRITE-SAFETY.md says so rather than
+ *    calling this optimistic locking.
  *
  * Unlike create and comment, this action IS idempotent — applying the same
  * patch twice leaves the task in the same state — so it may be safely retried.
@@ -66,7 +79,7 @@ const inputSchema = z
       .string()
       .optional()
       .describe(
-        'The task\'s modifiedAt value when it was loaded. When supplied, the update is rejected with ASANA_CONFLICT if the task changed since then, preventing a silent overwrite of a concurrent edit.',
+        "The task's modifiedAt value when it was loaded. When supplied, the connector re-reads the task and rejects the update with ASANA_CONFLICT if modifiedAt has moved. This is a stale-read guard, not an atomic compare-and-swap: Asana offers no conditional write for tasks, so a writer committing between the re-read and the update is not detected.",
       ),
   })
   /*
@@ -130,7 +143,11 @@ export function buildUpdatePayload(patch: UpdateTaskInput['patch']): {
 }
 
 /**
- * Optimistic concurrency check.
+ * Stale-read guard.
+ *
+ * Re-reads `modified_at` and refuses the update if it has moved since the
+ * caller loaded the task. See the header comment for why this is a guard and
+ * not a compare-and-swap.
  *
  * Costs one extra read, which is why it is opt-in rather than automatic: a
  * scripted bulk update does not want to pay for it, but an interactive edit
@@ -191,7 +208,7 @@ export const updateTaskAction: ConnectorAction<UpdateTaskInput, UpdateTaskOutput
     retryBehavior:
       'Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up to 2 further attempts, honouring Retry-After.',
     idempotencyBehavior:
-      'Naturally idempotent, so an idempotency key is optional. Use ifUnmodifiedSince to avoid overwriting a concurrent edit.',
+      'Naturally idempotent, so an idempotency key is optional. Use ifUnmodifiedSince for a stale-read guard that refuses the update when the task changed after it was loaded — a narrowed race window, not an atomic compare-and-swap.',
   },
   inputSchema,
   outputSchema,
@@ -207,7 +224,7 @@ export const updateTaskAction: ConnectorAction<UpdateTaskInput, UpdateTaskOutput
       input: { taskId: '1201234567890123', patch: { dueOn: null } },
     },
     {
-      title: 'Safe edit with concurrency check',
+      title: 'Safe edit with a stale-read guard',
       input: {
         taskId: '1201234567890123',
         patch: { notes: 'Revised description' },

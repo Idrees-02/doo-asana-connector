@@ -21,6 +21,8 @@
 import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
 
+import { isLoopbackBind, type McpSecurityDecision } from './runtime/mcp-security.js';
+
 /* -------------------------------------------------------------------------- */
 /* Env schema                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -77,6 +79,17 @@ const envSchema = z.object({
 
   // Server ----------------------------------------------------------------
   PORT: intFromString(1, 65_535, 8787),
+  /*
+   * The interface the HTTP server binds to.
+   *
+   * Blank is resolved below to loopback in development and every interface in
+   * production, because those are the correct defaults for each: a dev machine
+   * should not publish an API to the LAN by accident, and a container has to
+   * accept traffic from its platform's proxy. The value is security-relevant —
+   * `resolveMcpSecurity` refuses to run an unauthenticated /mcp on a
+   * non-loopback bind — so it is read here and passed down as data.
+   */
+  HOST: optionalString,
   CORS_ORIGIN: z.string().trim().catch('http://localhost:5173'),
   TRUST_PROXY: booleanish.catch(false),
   // Directory of a built console to serve from this origin. Blank => look for
@@ -94,10 +107,25 @@ const envSchema = z.object({
   // http exposes the Streamable HTTP transport for a deployed endpoint.
   MCP_TRANSPORT: z.enum(['stdio', 'http']).catch('stdio'),
   MCP_HTTP_PORT: intFromString(1, 65_535, 8788),
-  // Bearer token guarding the public /mcp endpoint. Blank => open, which is
-  // fine locally and unacceptable once deployed: the endpoint drives a real
-  // Asana workspace with the server's own credential.
+  /*
+   * Bearer token guarding the /mcp endpoint.
+   *
+   * Blank does NOT mean "open". See src/runtime/mcp-security.ts: blank is a
+   * startup error in production or on a non-loopback bind, and on a loopback
+   * development socket it causes a random token to be minted for the process.
+   * The endpoint drives a real Asana workspace with the server's own
+   * credential, so "no token configured" can never mean "no token required".
+   */
   MCP_AUTH_TOKEN: optionalString,
+  /*
+   * Deliberately run the local /mcp endpoint with no authentication.
+   *
+   * Honoured ONLY on a loopback bind outside production. Setting it in
+   * production, or alongside a non-loopback HOST, is a startup error rather
+   * than a silently-ignored value — an ignored security setting is a
+   * misunderstanding waiting to become an incident.
+   */
+  MCP_ALLOW_UNAUTHENTICATED: booleanish.catch(false),
   // Extra hosts the /mcp endpoint will answer to, comma-separated. Normally
   // unnecessary: the host list is derived from CORS_ORIGIN. Needed when the
   // endpoint is reached on a name the console is not served from.
@@ -111,6 +139,17 @@ const envSchema = z.object({
 
   // At-rest encryption for OAuth tokens. Blank => memory only.
   CREDENTIAL_ENCRYPTION_KEY: optionalString,
+
+  // Idempotency -----------------------------------------------------------
+  // Where used idempotency keys are recorded. `memory` is process-local and
+  // dies with the process; `file` survives a restart on a persistent volume.
+  // Neither coordinates across instances — see docs/WRITE-SAFETY.md, which
+  // states that limitation rather than implying distributed protection.
+  IDEMPOTENCY_STORE: z.enum(['memory', 'file']).catch('memory'),
+  IDEMPOTENCY_FILE: z.string().trim().catch('.idempotency/records.json'),
+  // 15 minutes by default: long enough to cover a human-initiated retry after
+  // a timeout, short enough that a key is not held for a whole deployment.
+  IDEMPOTENCY_TTL_MS: intFromString(60_000, 24 * 60 * 60 * 1000, 15 * 60 * 1000),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -138,6 +177,15 @@ export interface OAuthConfig {
 
 export interface ServerConfig {
   readonly port: number;
+  /**
+   * Resolved bind interface.
+   *
+   * Never undefined: the default is chosen from NODE_ENV so that every
+   * downstream security decision has a concrete address to reason about.
+   */
+  readonly host: string;
+  /** True when {@link host} is reachable from outside this machine. */
+  readonly externallyBound: boolean;
   readonly corsOrigin: string;
   readonly trustProxy: boolean;
   /** Explicit console build directory, when one was configured. */
@@ -149,10 +197,24 @@ export interface ServerConfig {
 export interface McpConfig {
   readonly transport: 'stdio' | 'http';
   readonly httpPort: number;
-  /** Bearer token required by the HTTP endpoint, when one is configured. */
+  /**
+   * Bearer token required by the HTTP endpoint, when one is configured.
+   *
+   * Absence is NOT permission to skip authentication — see
+   * `src/runtime/mcp-security.ts`, which turns this plus the bind address and
+   * NODE_ENV into a decision that either requires a token or refuses to start.
+   */
   readonly authToken: string | undefined;
+  /** Explicit opt-out, honoured only on a loopback bind outside production. */
+  readonly allowUnauthenticated: boolean;
   /** Additional hosts accepted by the HTTP endpoint, beyond the console's own. */
   readonly allowedHosts: readonly string[];
+}
+
+export interface IdempotencyConfig {
+  readonly store: 'memory' | 'file';
+  readonly filePath: string;
+  readonly ttlMs: number;
 }
 
 export interface AiConfig {
@@ -177,6 +239,7 @@ export interface AppConfig {
   readonly server: ServerConfig;
   readonly mcp: McpConfig;
   readonly ai: AiConfig;
+  readonly idempotency: IdempotencyConfig;
   readonly credentialEncryptionKey: string | undefined;
   readonly isProduction: boolean;
 }
@@ -221,6 +284,7 @@ export function buildConfig(raw: NodeJS.ProcessEnv): AppConfig {
 
   const hasCredentials = env.ASANA_ACCESS_TOKEN !== undefined || oauth !== undefined;
   const { mode, modeReason } = resolveMode(env.ASANA_MODE, hasCredentials, env.ASANA_ACCESS_TOKEN);
+  const host = resolveHost(env.HOST, env.NODE_ENV);
 
   return {
     nodeEnv: env.NODE_ENV,
@@ -238,6 +302,8 @@ export function buildConfig(raw: NodeJS.ProcessEnv): AppConfig {
     oauth,
     server: {
       port: env.PORT,
+      host,
+      externallyBound: !isLoopbackBind(host),
       corsOrigin: env.CORS_ORIGIN,
       trustProxy: env.TRUST_PROXY,
       webDist: env.WEB_DIST,
@@ -248,6 +314,7 @@ export function buildConfig(raw: NodeJS.ProcessEnv): AppConfig {
       transport: env.MCP_TRANSPORT,
       httpPort: env.MCP_HTTP_PORT,
       authToken: env.MCP_AUTH_TOKEN,
+      allowUnauthenticated: env.MCP_ALLOW_UNAUTHENTICATED,
       allowedHosts:
         env.MCP_ALLOWED_HOSTS === undefined
           ? []
@@ -260,9 +327,29 @@ export function buildConfig(raw: NodeJS.ProcessEnv): AppConfig {
       model: env.GROQ_MODEL,
       enabled: env.GROQ_API_KEY !== undefined,
     },
+    idempotency: {
+      store: env.IDEMPOTENCY_STORE,
+      filePath: env.IDEMPOTENCY_FILE,
+      ttlMs: env.IDEMPOTENCY_TTL_MS,
+    },
     credentialEncryptionKey: env.CREDENTIAL_ENCRYPTION_KEY,
     isProduction: env.NODE_ENV === 'production',
   };
+}
+
+/**
+ * Choose the bind interface.
+ *
+ * An explicit HOST always wins. Otherwise the default is derived from the
+ * environment, because the right answer genuinely differs: a container has to
+ * accept traffic from its platform's proxy, and a development machine should
+ * not publish an API to the coffee-shop Wi-Fi because someone ran `npm run
+ * dev`. Making the dev default loopback also makes the unauthenticated local
+ * MCP mode safe to offer at all.
+ */
+function resolveHost(explicit: string | undefined, nodeEnv: Env['NODE_ENV']): string {
+  if (explicit !== undefined) return explicit;
+  return nodeEnv === 'production' ? '0.0.0.0' : '127.0.0.1';
 }
 
 function resolveMode(
@@ -346,6 +433,9 @@ export interface SafeConfigDescription {
   };
   readonly server: {
     readonly port: number;
+    readonly host: string;
+    /** True when the socket is reachable from outside this machine. */
+    readonly externallyBound: boolean;
     readonly corsOrigin: string;
     /** Null when unset, in which case the console uses its own origin. */
     readonly publicBaseUrl: string | null;
@@ -355,6 +445,14 @@ export interface SafeConfigDescription {
     readonly httpPort: number;
     /** Whether the public endpoint is guarded. Never the token itself. */
     readonly authRequired: boolean;
+    /**
+     * How that state was arrived at: a configured token, a token minted for
+     * this process, or an explicit local opt-out. Never the token itself.
+     * Null when the endpoint has not been mounted (stdio-only processes).
+     */
+    readonly authSource: string | null;
+    /** Plain-language justification, so the posture is never a mystery. */
+    readonly authReason: string | null;
     /** The endpoint's public URL, when a public origin is configured. */
     readonly publicUrl: string | null;
   };
@@ -364,7 +462,18 @@ export interface SafeConfigDescription {
   readonly credentialEncryptionEnabled: boolean;
 }
 
-export function describeConfig(cfg: AppConfig, fingerprint: string | null = null): SafeConfigDescription {
+/**
+ * Render config in a form that is safe to log, render, or return over HTTP.
+ *
+ * `mcpSecurity` is passed in rather than recomputed because resolving it can
+ * throw, and a status endpoint must not be the thing that discovers an
+ * insecure configuration — startup already refused in that case.
+ */
+export function describeConfig(
+  cfg: AppConfig,
+  fingerprint: string | null = null,
+  mcpSecurity: McpSecurityDecision | undefined = undefined,
+): SafeConfigDescription {
   return {
     mode: cfg.mode,
     modeReason: cfg.modeReason,
@@ -385,13 +494,19 @@ export function describeConfig(cfg: AppConfig, fingerprint: string | null = null
     },
     server: {
       port: cfg.server.port,
+      host: cfg.server.host,
+      externallyBound: cfg.server.externallyBound,
       corsOrigin: cfg.server.corsOrigin,
       publicBaseUrl: cfg.server.publicBaseUrl ?? null,
     },
     mcp: {
       transport: cfg.mcp.transport,
       httpPort: cfg.mcp.httpPort,
-      authRequired: cfg.mcp.authToken !== undefined,
+      // Reports the resolved posture when one exists. Falls back to "is a
+      // token configured", which is the only thing knowable without it.
+      authRequired: mcpSecurity?.authRequired ?? cfg.mcp.authToken !== undefined,
+      authSource: mcpSecurity?.source ?? null,
+      authReason: mcpSecurity?.reason ?? null,
       // Derived rather than separately configured: the endpoint is always
       // /mcp on this origin, so one variable cannot drift from the other.
       publicUrl:

@@ -36,8 +36,18 @@ jobs:
       - name: Install
         run: npm ci
 
+      # ---------------------------------------------------------------------
+      # Gates that can fail without running any code first. Cheapest, and the
+      # ones whose failure is least ambiguous, so they go first.
+      # ---------------------------------------------------------------------
+
       - name: Secret scan
         run: npm run secrets:scan
+
+      - name: Dependency licence audit
+        # Fails on an unknown or copyleft licence, and on a stale
+        # THIRD-PARTY-NOTICES.md.
+        run: npm run licenses:check
 
       - name: Typecheck
         run: npm run typecheck
@@ -45,22 +55,164 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # ---------------------------------------------------------------------
+      # Contract gates. These fail the build when the PUBLISHED contract stops
+      # describing the code — which is the failure a reviewer cannot see by
+      # reading a diff.
+      # ---------------------------------------------------------------------
+
+      - name: Generated contracts are current
+        # Regenerates openapi.yaml / connector.yaml from the Zod schemas and
+        # fails if the committed copies differ. Schema conversion is
+        # fail-closed, so an unrepresentable action schema also stops here
+        # rather than being published as a permissive object.
+        run: npm run generate:check
+
+      # ---------------------------------------------------------------------
+      # Tests. The suite includes, as ordinary test files:
+      #   tests/unit/mcp-security.test.ts        the auth policy matrix
+      #   tests/integration/startup-security.test.ts
+      #                                          the app REFUSES to start with
+      #                                          an unauthenticated production
+      #                                          or externally-bound /mcp
+      #   tests/unit/json-schema.test.ts         Draft 2020-12, via Ajv
+      #   tests/integration/openapi.test.ts      OpenAPI 3.1, via a real parser
+      #   tests/integration/privacy.test.ts      no real account data anywhere
+      #   tests/integration/acceptance.test.ts   the five required actions
+      # so a failure in any of them fails the pull request.
+      # ---------------------------------------------------------------------
+
       - name: Connector tests
         run: npm test
 
       - name: Frontend tests
         run: npm run test:frontend
 
+      # ---------------------------------------------------------------------
+      # Build last: a compile failure is the least informative signal, so it is
+      # better to have already reported the specific one.
+      # ---------------------------------------------------------------------
+
       - name: Build
         run: npm run build
 
-      - name: Verify generated artifacts are current
-        # openapi.yaml and connector.yaml are generated from the Zod schemas.
-        # If regenerating changes them, the committed copies are stale.
+  # A separate job, because it asserts a property of the DEPLOYMENT rather than
+  # of the code, and because a failure here should read as "this would ship
+  # insecurely" rather than as a test regression buried in a list of 680.
+  production-security:
+    name: Production security configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build:core
+
+      - name: Production without MCP_AUTH_TOKEN must FAIL to start
+        # The finding this whole gate exists for. The server previously logged
+        # a warning here and served an unauthenticated endpoint that could
+        # drive a real Asana workspace with its own credential.
+        env:
+          NODE_ENV: production
+          ASANA_MODE: demo
+          PORT: '8791'
         run: |
-          npm run generate
-          if ! git diff --quiet -- openapi.yaml connector.yaml; then
-            echo "::error::openapi.yaml / connector.yaml are out of date. Run 'npm run generate' and commit the result."
-            git diff -- openapi.yaml connector.yaml
+          set +e
+          output=$(node dist/server/index.js 2>&1)
+          code=$?
+          set -e
+          echo "$output"
+          if [ "$code" -eq 0 ]; then
+            echo "::error::The server started in production with no MCP_AUTH_TOKEN. It must fail closed."
             exit 1
           fi
+          echo "$output" | grep -q "MCP_AUTH_TOKEN" || {
+            echo "::error::It refused to start, but the message does not name the remediation."
+            exit 1
+          }
+          echo "Refused to start, as required."
+
+      - name: The unauthenticated bypass must be refused in production
+        env:
+          NODE_ENV: production
+          ASANA_MODE: demo
+          MCP_ALLOW_UNAUTHENTICATED: 'true'
+          PORT: '8792'
+        run: |
+          set +e
+          output=$(node dist/server/index.js 2>&1)
+          code=$?
+          set -e
+          echo "$output"
+          if [ "$code" -eq 0 ]; then
+            echo "::error::MCP_ALLOW_UNAUTHENTICATED was honoured in production. It must be refused."
+            exit 1
+          fi
+          echo "Bypass refused in production, as required."
+
+      - name: An external bind without a token must FAIL to start
+        env:
+          NODE_ENV: development
+          ASANA_MODE: demo
+          HOST: 0.0.0.0
+          PORT: '8793'
+        run: |
+          set +e
+          output=$(node dist/server/index.js 2>&1)
+          code=$?
+          set -e
+          echo "$output"
+          if [ "$code" -eq 0 ]; then
+            echo "::error::The server bound to 0.0.0.0 with no MCP_AUTH_TOKEN. It must fail closed."
+            exit 1
+          fi
+          echo "Refused to start, as required."
+
+      - name: Production WITH a token must start and require it
+        env:
+          NODE_ENV: production
+          ASANA_MODE: demo
+          PORT: '8794'
+          MCP_AUTH_TOKEN: ci-only-token-000000000000000000000000000000
+        run: |
+          node dist/server/index.js &
+          server=$!
+          # Poll rather than sleep a fixed amount: a fixed wait is either flaky
+          # or slow, and usually both.
+          for _ in $(seq 1 40); do
+            if curl -sf "http://127.0.0.1:8794/api/ready" >/dev/null; then break; fi
+            sleep 0.25
+          done
+
+          ready=$(curl -sf "http://127.0.0.1:8794/api/ready")
+          echo "$ready"
+          echo "$ready" | grep -q '"authRequired":true' || {
+            echo "::error::The endpoint started without requiring authentication."
+            kill $server; exit 1
+          }
+          echo "$ready" | grep -q 'ci-only-token' && {
+            echo "::error::The readiness endpoint disclosed the MCP token."
+            kill $server; exit 1
+          }
+
+          anon=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            -H 'content-type: application/json' \
+            -H 'accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+            "http://127.0.0.1:8794/mcp")
+          kill $server
+
+          if [ "$anon" != "401" ]; then
+            echo "::error::An unauthenticated /mcp request returned $anon, expected 401."
+            exit 1
+          fi
+          echo "Started, required the token, and disclosed nothing."

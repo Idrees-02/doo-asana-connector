@@ -121,7 +121,7 @@ const WORKSPACE: SeedWorkspace = {
 };
 
 const USERS: readonly SeedUser[] = [
-  { gid: '900000000000101', name: 'Idrees Khaled', email: 'idrees@example.invalid' },
+  { gid: '900000000000101', name: 'Sam Rivera', email: 'sam@example.invalid' },
   { gid: '900000000000102', name: 'Layla Hassan', email: 'layla@example.invalid' },
   { gid: '900000000000103', name: 'Omar Nasser', email: 'omar@example.invalid' },
 ];

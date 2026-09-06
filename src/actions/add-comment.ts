@@ -63,7 +63,7 @@ export const addCommentAction: ConnectorAction<AddCommentInput, AddCommentOutput
     retryBehavior:
       'NEVER retried automatically. A failed request may already have posted the comment, so the connector reports retryStrategy=manual_with_idempotency_key rather than risking a double post.',
     idempotencyBehavior:
-      'Supply idempotencyKey to make deliberate retries safe: a repeated key replays the original result instead of posting again. Process-local, 15-minute TTL. The console additionally warns before re-posting identical text within 60 seconds.',
+      'Supply idempotencyKey to make deliberate retries safe: a repeated key replays the original result instead of posting again. Scoped per action and caller; TTL is configurable (15 minutes by default). Records live in the configured store — in memory by default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither store coordinates across instances, so a multi-replica deployment needs a shared backend; see docs/WRITE-SAFETY.md. The console additionally warns before re-posting identical text within 60 seconds.',
   },
   inputSchema,
   outputSchema,

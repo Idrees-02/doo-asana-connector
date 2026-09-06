@@ -61,6 +61,8 @@ export function Mcp() {
   const configured = status.data?.config.mcp.publicUrl ?? null;
   const endpoint = configured ?? `${window.location.origin}/mcp`;
   const authRequired = status.data?.config.mcp.authRequired ?? false;
+  const authSource = status.data?.config.mcp.authSource ?? null;
+  const authReason = status.data?.config.mcp.authReason ?? null;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -125,7 +127,11 @@ export function Mcp() {
                 {configured === null ? 'From this origin' : 'Configured'}
               </StatusPill>
               <StatusPill tone={authRequired ? 'success' : 'danger'}>
-                {authRequired ? 'Bearer token required' : 'No token set'}
+                {authRequired
+                  ? authSource === 'ephemeral-dev'
+                    ? 'Bearer token required (generated)'
+                    : 'Bearer token required'
+                  : 'UNAUTHENTICATED'}
               </StatusPill>
             </div>
             <CodeBlock code={endpoint} />
@@ -145,10 +151,24 @@ export function Mcp() {
             </p>
             {authRequired ? null : (
               <p className="mt-1.5 text-[11px] text-(--color-warning)">
-                <code className="mono">MCP_AUTH_TOKEN</code> is unset, so this endpoint is open. It
-                executes real actions with the server&apos;s credential — set one before leaving it
-                reachable.
+                This endpoint is running <strong>unauthenticated</strong> because{' '}
+                <code className="mono">MCP_ALLOW_UNAUTHENTICATED</code> is set. It executes real
+                actions with the server&apos;s credential. This is only possible on a loopback bind
+                outside production — the server refuses to start otherwise.
               </p>
+            )}
+            {authSource === 'ephemeral-dev' ? (
+              <p className="mt-1.5 text-[11px] text-(--color-ink-subtle)">
+                No <code className="mono">MCP_AUTH_TOKEN</code> was configured, so this process
+                generated one and printed it to the server&apos;s startup log (stderr). It changes
+                on every restart and is deliberately not shown here — a token exposed over HTTP
+                would not be a token. Set{' '}
+                <code className="mono">MCP_AUTH_TOKEN</code> in <code className="mono">.env</code>{' '}
+                for a stable value.
+              </p>
+            ) : null}
+            {authReason === null ? null : (
+              <p className="mt-1.5 text-[11px] text-(--color-ink-subtle)">{authReason}</p>
             )}
           </div>
 

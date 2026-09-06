@@ -113,7 +113,7 @@ describe('testConnection', () => {
 
     expect(result.connected).toBe(true);
     expect(result.provider).toBe('asana');
-    expect(result.account?.name).toBe('Idrees Khaled');
+    expect(result.account?.name).toBe('Sam Rivera');
     expect(result.workspaces).toHaveLength(1);
     expect(result.error).toBeNull();
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);

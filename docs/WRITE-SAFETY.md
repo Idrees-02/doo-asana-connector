@@ -104,16 +104,54 @@ Supply `idempotencyKey` with a write and a repeat of the same key returns the
 Concurrent calls with the same key are collapsed — the second joins the first
 rather than racing it.
 
+### Key reuse with a different body is an error, not a replay
+
+A key is bound to the first request body it was used with. Reusing it with
+different values is rejected with `ASANA_IDEMPOTENCY_CONFLICT`:
+
+```jsonc
+// First call, with key "launch-doc"      -> creates "Prepare launch docs"
+// Second call, same key, different name  -> ASANA_IDEMPOTENCY_CONFLICT
+```
+
+Replaying the first result there would hand the caller a task they did not ask
+for, which is worse than an error. Bodies are compared by a SHA-256 of a
+canonical (key-sorted) encoding, so a genuine retry whose JSON round-tripped
+with different key ordering still replays rather than conflicting.
+
+Records are scoped by **(principal, action, key)**, so two callers cannot
+collide on a common key like `retry-1`, and one action can never replay
+another's result.
+
+### Storage, and exactly how far it reaches
+
+| `IDEMPOTENCY_STORE` | Survives a restart | Shared across instances |
+| --- | --- | --- |
+| `memory` (default) | No | No |
+| `file` | **Yes**, on a persistent volume | No |
+
+`file` writes `IDEMPOTENCY_FILE` at mode `0600` (a record can contain a task
+name or comment text — the user's data, even though it is not a credential).
+Only the request **hash** is stored, never the request body.
+
 ### What this does not do
 
 Stated plainly, because overstating it would be worse than not having it:
 
-- **It is process-local.** The cache lives in memory. A server restart clears
-  it, and a second instance behind a load balancer knows nothing about it.
-- **It expires after 15 minutes.** A retry the next day will create a duplicate.
+- **It is NOT distributed.** Neither store coordinates across instances. Two
+  replicas behind a load balancer each keep their own records, so the same key
+  routed to different replicas executes twice. Running more than one instance
+  safely requires a shared backend. The storage layer is an interface
+  (`IdempotencyStore`, four methods) precisely so Redis or Postgres is a
+  drop-in — but **no such backend is implemented today, and none is claimed**.
+  `tests/unit/idempotency.test.ts` asserts both halves of that: two independent
+  in-memory managers do *not* deduplicate, and two managers sharing one durable
+  store *do*.
+- **It expires.** `IDEMPOTENCY_TTL_MS` defaults to 15 minutes. A retry the next
+  day will create a duplicate.
 - **It cannot help when the response was lost.** If Asana created the task but
-  the connector never saw the reply, nothing was cached — the key only helps
-  once a result has been recorded.
+  the connector never saw the reply, nothing was recorded — the key only helps
+  once a result exists to replay.
 
 That last point is exactly why Rule 1 exists. Idempotency keys make *deliberate*
 retries safe; refusing to auto-retry is what prevents the *accidental* ones.
@@ -154,7 +192,7 @@ the console's Action Center — all generated from one definition in the action 
 
 ---
 
-## Concurrency: the stale-write guard
+## Concurrency: a stale-read guard, NOT compare-and-swap
 
 `asana.update_task` accepts an optional `ifUnmodifiedSince`, which should be the
 `modifiedAt` value the caller actually read:
@@ -167,11 +205,36 @@ the console's Action Center — all generated from one definition in the action 
 }
 ```
 
-The connector re-reads the task first and rejects with `ASANA_CONFLICT` if it
-changed. Without this, read-modify-write over HTTP silently loses the other
-person's edit — the classic lost-update problem.
+The connector re-reads the task first and rejects with `ASANA_CONFLICT` if
+`modified_at` has moved. Without this, read-modify-write over HTTP silently
+loses the other person's edit — the classic lost-update problem.
 
-Two caveats worth knowing:
+### Named precisely, because the difference matters
+
+This is **not** optimistic locking and **not** an atomic compare-and-swap. The
+implementation is GET, compare, then PUT:
+
+```
+GET  /tasks/{gid}?opt_fields=modified_at     <- read
+        ← another writer can commit HERE →     <- the window
+PUT  /tasks/{gid}                              <- write
+```
+
+Asana exposes **no conditional-write primitive for tasks** — no ETag, no
+`If-Match`, no version field — so there is no compare-and-swap available to
+perform. Two consequences follow, and both are real:
+
+- **A writer committing inside the window is not detected.** The guard narrows
+  the race from "the whole time the user had the form open" to "one network
+  round trip". That is a large and worthwhile reduction. It does not close it.
+- **`modified_at` is millisecond-resolution.** An edit landing in the same
+  millisecond as the caller's read is indistinguishable from no edit at all.
+
+`tests/integration/acceptance.test.ts` asserts both the guard working and the
+GET-then-PUT shape, so this description stays anchored to observable behaviour
+rather than drifting into a stronger claim.
+
+Two further caveats:
 
 - It costs one extra GET, which is why it is opt-in rather than automatic. The
   console's edit form always sends it; a bulk script probably should not.
@@ -204,11 +267,24 @@ reports success.
 | --- | --- |
 | No auto-retry on non-idempotent writes | Duplicates from timeouts and 5xx |
 | Explicit approval | Accidental writes by agents |
-| Idempotency keys | Duplicates from deliberate retries (process-local) |
-| `ifUnmodifiedSince` | Silently overwriting a concurrent edit |
+| Idempotency keys | Duplicates from deliberate retries (single-instance) |
+| Idempotency conflict detection | A reused key silently replaying the wrong result |
+| `ifUnmodifiedSince` | Overwriting an edit made before the caller's read |
 | `null` vs absent | Wiping fields the caller never mentioned |
 | UI duplicate warning | A user re-posting the same comment |
 
-Verified by tests in `tests/actions/actions.test.ts`,
+Verified by tests in `tests/integration/acceptance.test.ts` (the five-action
+scenario, including approval, idempotency replay, key conflict, concurrent
+collapse and the stale-read guard), `tests/unit/idempotency.test.ts`,
+`tests/unit/reliability-matrix.test.ts` (every HTTP status swept through both
+a read and a non-idempotent write), `tests/integration/fixtures.test.ts`
+(**real captured `POST /tasks`, `PUT /tasks/{gid}` and
+`POST /tasks/{gid}/stories` responses**), `tests/actions/actions.test.ts`,
 `tests/unit/client.test.ts`, `tests/unit/errors.test.ts` and
 `frontend/src/test/console.test.tsx`.
+
+The same five actions were also run end to end against a **real Asana
+workspace** on 2026-09-06 via `npm run smoke:live -- --writes` — 9/9 passed,
+including the idempotency replay returning the original task rather than
+creating a second one. See [LIMITATIONS.md](LIMITATIONS.md) for the full
+record of what is and is not independently verified.

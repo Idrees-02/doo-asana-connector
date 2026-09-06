@@ -135,13 +135,13 @@ describe('exchangeCodeForTokens — the callback handler', () => {
         status: 200,
         body: {
           // secrets-scan-ignore: synthetic placeholder, not a real credential
-          access_token: 'live-access-token',
+          access_token: 'fake-access-token-for-tests',
           token_type: 'bearer',
           expires_in: 3600,
           // secrets-scan-ignore: synthetic placeholder, not a real credential
-          refresh_token: 'live-refresh-token',
+          refresh_token: 'fake-refresh-token-for-tests',
           scope: CONFIG.scopes.join(' '),
-          data: { gid: '12345', name: 'Idrees Khaled', email: 'idrees@example.invalid' },
+          data: { gid: '12345', name: 'Sam Rivera', email: 'sam@example.invalid' },
         },
       };
     });
@@ -159,9 +159,9 @@ describe('exchangeCodeForTokens — the callback handler', () => {
     expect(credentials).toMatchObject({
       type: 'oauth',
       // secrets-scan-ignore: synthetic placeholder, not a real credential
-      accessToken: 'live-access-token',
+      accessToken: 'fake-access-token-for-tests',
       // secrets-scan-ignore: synthetic placeholder, not a real credential
-      refreshToken: 'live-refresh-token',
+      refreshToken: 'fake-refresh-token-for-tests',
     });
     expect(credentials.expiresAt).toBeGreaterThan(Date.now());
   });

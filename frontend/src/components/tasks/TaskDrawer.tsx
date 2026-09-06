@@ -219,7 +219,8 @@ function EditTaskForm({
       {
         taskId: task.id,
         patch,
-        // Optimistic concurrency: reject rather than overwrite a newer edit.
+        // Stale-read guard: reject rather than overwrite a newer edit. Not a
+        // compare-and-swap — see docs/WRITE-SAFETY.md.
         ...(task.modifiedAt === null ? {} : { ifUnmodifiedSince: task.modifiedAt }),
       },
       {

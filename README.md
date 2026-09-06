@@ -8,6 +8,16 @@ A production-oriented Asana connector: a reusable connector core with five typed
 actions, normalized errors, pagination and rate-limit handling, a thin MCP
 adapter, and a dark-first developer console over the top.
 
+**Live deployment**
+
+| | |
+| --- | --- |
+| Console | <https://doo-asana-connectorfrontend-production-80e4.up.railway.app/overview> |
+| MCP endpoint | `https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp` — Streamable HTTP, bearer token required |
+| MCP liveness | <https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp/health> — open, so platform probes work |
+
+The MCP endpoint answers **401** without `Authorization: Bearer <MCP_AUTH_TOKEN>`.
+
 ---
 
 ## Quickstart
@@ -31,11 +41,16 @@ hosted services.
 ### Reviewing the engineering rather than the UI
 
 ```bash
-npm test              # connector suite: all five actions, errors, pagination, rate limits
-npm run test:frontend # console tests
-npm run verify        # typecheck + lint + secret scan + tests
+npm test              # connector suite: 757 tests
+npm run test:frontend # console suite: 29 tests
+npm run verify        # typecheck + lint + secret scan + licence audit + both suites
 npm run mcp           # MCP server over stdio
 ```
+
+The suite includes a five-action acceptance scenario
+(`tests/integration/acceptance.test.ts`) that walks the required actions in
+order and asserts approval, idempotency, pagination, request ids, the
+stale-read guard and error normalization at the point each applies.
 
 ---
 
@@ -153,6 +168,30 @@ mechanically, not by convention:
   content.
 - **The test suite requires no credentials**, so CI runs with no secrets
   configured at all.
+- **A repository-wide privacy scan** (`tests/integration/privacy.test.ts`)
+  fails the build if a real Asana identifier — a workspace gid, a project name,
+  a non-reserved email domain — appears anywhere in tracked files.
+- **A dependency licence audit** (`npm run licenses:check`) fails on an unknown
+  or copyleft licence.
+
+Full detail: [`docs/SECURITY.md`](docs/SECURITY.md).
+
+### The `/mcp` endpoint fails closed
+
+`/mcp` runs real actions with **this server's own Asana credential**, so the
+connector refuses to start rather than expose it unauthenticated:
+
+| Configuration | Result |
+| --- | --- |
+| `NODE_ENV=production` without `MCP_AUTH_TOKEN` | **Startup error** |
+| Non-loopback `HOST` without a token | **Startup error** |
+| `MCP_ALLOW_UNAUTHENTICATED=true` in production | **Startup error** — refused, not ignored |
+| Local development with no token | Starts with a token minted for the process and printed to stderr |
+| Local development with `MCP_ALLOW_UNAUTHENTICATED=true` | Starts unauthenticated — explicit, loopback only |
+
+`approved: true` is **not** authentication. It is write consent inside an
+already-authenticated request body, and the two controls are asserted
+independently.
 
 ---
 
@@ -170,7 +209,11 @@ locally and deployed with nothing changed but the environment. See
 | `ASANA_TIMEOUT_MS` | `15000` | Per-request timeout |
 | `ASANA_MAX_CONCURRENCY` | `8` | In-flight request cap (Asana allows 50 GET / 15 write) |
 | `PORT` | `8787` | API port |
+| `HOST` | loopback in dev, `0.0.0.0` in prod | Bind interface. **Security-relevant** — a non-loopback bind makes `MCP_AUTH_TOKEN` mandatory |
 | `MCP_TRANSPORT` | `stdio` | `stdio` locally, `http` for a deployed endpoint |
+| `MCP_AUTH_TOKEN` | — | Bearer token for `/mcp`. **Mandatory in production**; ≥16 characters |
+| `MCP_ALLOW_UNAUTHENTICATED` | `false` | Run the local `/mcp` open. Refused in production and on a non-loopback bind |
+| `IDEMPOTENCY_STORE` | `memory` | `memory` or `file`. `file` survives a restart; neither is distributed |
 | `PUBLIC_BASE_URL` | — | This deployment's public origin. The console prints `<origin>/mcp` as the MCP endpoint |
 
 `ASANA_MODE=live` without credentials **fails at startup on purpose** — silently
@@ -208,11 +251,13 @@ doo-asana-connector/
 
 | Document | Contents |
 | --- | --- |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | The threat model, the fail-closed MCP policy, token handling, and every automated gate |
 | [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md) | Getting a PAT or OAuth app, and how credentials are handled |
 | [`docs/WRITE-SAFETY.md`](docs/WRITE-SAFETY.md) | Why writes are never auto-retried, approval, idempotency, concurrency |
 | [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) | What is not built, and what is not yet verified |
 | [`openapi.yaml`](openapi.yaml) | Generated API contract |
 | [`connector.yaml`](connector.yaml) | Generated connector manifest |
+| [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) | Generated dependency licence inventory (447 packages) |
 
 In-app documentation is also available at **/docs** in the running console.
 
@@ -249,17 +294,27 @@ The API server also mounts the same adapter at `/mcp`, so a deployment exposes
 both surfaces on one origin and one process:
 
 ```
-https://<your-host>/mcp          # Streamable HTTP endpoint
-https://<your-host>/mcp/health   # liveness, unauthenticated
+https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp          # Streamable HTTP endpoint
+https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp/health   # liveness, unauthenticated
 ```
 
-**Set `MCP_AUTH_TOKEN` before deploying.** The endpoint executes real actions
-using the server's own Asana credential, so without a token anyone who learns
-the URL can drive the workspace. Clients send it as a bearer token:
+**`MCP_AUTH_TOKEN` is mandatory in production — the server will not start
+without it.** The endpoint executes real actions using the server's own Asana
+credential, so without a token anyone who learns the URL can drive the
+workspace. Generate one:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Clients send it as a bearer token:
 
 ```
 Authorization: Bearer <MCP_AUTH_TOKEN>
 ```
+
+Running locally with no token configured is fine: the server mints one for the
+process and prints it to stderr at startup.
 
 The standalone process (`npm run mcp` with `MCP_TRANSPORT=http`) remains
 available for running MCP on a port of its own.
@@ -287,35 +342,43 @@ hides the assistant.
 ## Assignment checklist
 
 Marked honestly. Anything not demonstrated is called out rather than assumed.
+Live results below are from **6 September 2026**; see
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) for the full record.
 
 | Requirement | Status |
 | --- | --- |
 | Manifest exists | Yes — generated, `connector.yaml`, 35 actions |
-| Asana authentication (PAT + OAuth 2.0) | PAT **verified live**; OAuth authorize step **verified live** against Asana (real client_id, PKCE, scopes accepted); interactive consent not clicked through — see below |
-| `testConnection` has no side effects | Yes — asserted by test (no non-GET request) |
-| All five required actions implemented | Yes — end-to-end tested, plus 30 extended actions (35 total) |
+| Asana authentication (PAT + OAuth 2.0) | PAT **verified live**; OAuth authorize step verified live (real `client_id`, PKCE, scopes accepted); interactive consent not clicked through — see below |
+| `testConnection` has no side effects | Yes — asserted by test (no non-GET request), and it returns a `requestId` |
+| All five required actions implemented | Yes — **verified live, 9/9**, plus 30 extended actions (35 total) |
+| Captured provider fixtures for all five | Yes — including real `POST /tasks`, `PUT /tasks/{gid}` and `POST /tasks/{gid}/stories` responses |
 | Typed input/output schemas | Yes — Zod, single source of truth |
 | Inputs validated | Yes — before any network call |
-| Errors normalized | Yes — 19 `ASANA_*` codes |
-| Request IDs | Yes — connector-generated; Asana returns none |
+| Errors normalized | Yes — 19 `ASANA_*` codes; the published enum equals the runtime's, asserted by test |
+| Request IDs | Yes — connector-generated on every result and every error; Asana returns none |
 | Retry classification | Yes — including `manual_with_idempotency_key` |
-| Pagination | Yes — cursor-based, all list actions |
-| Rate limits handled | Yes — client-side pacing before sending |
-| Approval / idempotency / duplicates documented | Yes — `docs/WRITE-SAFETY.md`, all 21 write actions require approval |
-| No secrets committed | Yes — scanner + pre-commit hook + CI |
-| Unit and fixture tests pass | Yes — 263 total (238 connector + 25 console) |
-| OpenAPI exists | Yes — generated, 35 endpoints |
+| Pagination | Yes — cursor-based, all list actions, asserted to advance |
+| Rate limits handled | Yes — client-side pacing before sending, `Retry-After` honoured |
+| Approval / idempotency / duplicates documented | Yes — `docs/WRITE-SAFETY.md`; all 21 write actions require approval |
+| Idempotency | Replay, key-conflict detection, concurrent collapse, optional durable store — **not distributed**, and stated as such |
+| No secrets committed | Yes — scanner + privacy scan + pre-commit hook + CI |
+| Unit and fixture tests pass | Yes — **786 total** (757 connector + 29 console), executed |
+| OpenAPI exists | Yes — generated, 3.1.0, **validated by a real OpenAPI parser in CI** |
+| JSON Schema | Draft 2020-12, **compiled by Ajv in CI**; conversion is fail-closed |
 | MCP adapter exists, duplicates no logic | Yes — enforced by test, all 35 actions exposed as tools |
+| MCP endpoint security | **Fails closed** — production or external bind without `MCP_AUTH_TOKEN` refuses to start; asserted by a dedicated CI job |
 | Frontend connected to the real backend | Yes — no mocked UI data, all 35 actions surfaced |
-| Frontend responsive and accessible | Yes — per-breakpoint layouts, 25 tests |
-| Documentation and known limitations | Yes |
+| Frontend responsive and accessible | Yes — per-breakpoint layouts, 29 tests |
+| Documentation and known limitations | Yes — including what is *not* verified |
+| Licensing | Root `LICENSE` (MIT) + generated `THIRD-PARTY-NOTICES.md`; audit gate in CI |
 | Versioned v1.0.0 | Yes |
-| **Real sandbox/test-account flow** | **Verified** — required 5 actions live end-to-end (9/9), 30 extended actions live-checked via `asana.get_current_user` |
-| **OAuth interactive consent** | **Not clicked through** — requires a human login, which this assistant will not perform. Authorization request verified live; token exchange/refresh/revoke covered by 21 tests against a double matching Asana's real contract |
-| **HTTPS MCP endpoint deployed** | **Not met by design** — local-first; HTTP transport implemented but undeployed |
+| **Real sandbox/test-account flow** | **Verified 2026-09-06** — required 5 actions live end-to-end (9/9), including idempotency replay creating no duplicate |
+| **MCP endpoint driving live Asana** | **Verified 2026-09-06** — authenticated Streamable HTTP session, 35 tools listed, `asana_list_projects` returned live data, unapproved write refused |
+| **OAuth interactive consent** | **Not clicked through** — requires a human login. Token exchange/refresh/revoke covered by tests against a double matching Asana's contract |
+| **HTTPS MCP endpoint deployed** | **Deployed** — `https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp`, HTTPS, returns 401 unauthenticated |
 
-The remaining gap is the HTTPS MCP endpoint, which is not met by design
-(local-first). See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) for what remains
+externally unverified.
 
 ---
 
@@ -324,10 +387,13 @@ The remaining gap is the HTTPS MCP endpoint, which is not met by design
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | API + console together |
-| `npm test` | Connector suite (141 tests) |
-| `npm run test:frontend` | Console suite (25 tests) |
-| `npm run verify` | typecheck + lint + secret scan + tests |
+| `npm test` | Connector suite (757 tests) |
+| `npm run test:frontend` | Console suite (29 tests) |
+| `npm run verify` | typecheck + lint + secret scan + licence audit + both suites |
 | `npm run generate` | Regenerate `openapi.yaml` and `connector.yaml` |
+| `npm run generate:check` | Fail if the committed contracts are stale |
+| `npm run licenses` | Regenerate `THIRD-PARTY-NOTICES.md` |
+| `npm run licenses:check` | Fail on an unknown/copyleft licence or stale notices |
 | `npm run setup` | Interactive .env setup — hidden token input, verifies the connection |
 | `npm run smoke:live` | Read-only check against real Asana (needs a PAT) |
 | `npm run smoke:live -- --writes` | Also exercises create/update/comment |
@@ -335,4 +401,9 @@ The remaining gap is the HTTPS MCP endpoint, which is not met by design
 
 ## License
 
-MIT
+MIT — see [`LICENSE`](LICENSE).
+
+Dependency licences are inventoried in
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md), regenerated by
+`npm run licenses` and verified in CI. All 447 packages carry permissive
+licences; the repository vendors no third-party source.

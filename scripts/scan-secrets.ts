@@ -84,7 +84,6 @@ const SKIP_PATHS: readonly RegExp[] = [
   /^scripts\/scan-secrets\.ts$/, // this file defines the patterns
   /^package-lock\.json$/,
   /^(?:dist|node_modules|coverage)\//,
-  /^docs\/SECURITY\.md$/,
 ];
 
 const SKIP_EXTENSIONS = new Set([

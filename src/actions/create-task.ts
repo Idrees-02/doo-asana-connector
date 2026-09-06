@@ -99,7 +99,7 @@ export const createTaskAction: ConnectorAction<CreateTaskInput, CreateTaskOutput
     retryBehavior:
       'NEVER retried automatically. A failed create may already have succeeded (particularly on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves the decision to the caller.',
     idempotencyBehavior:
-      'Supply idempotencyKey to make deliberate retries safe: a repeated key replays the original result instead of creating a second task. Process-local and 15-minute TTL — it does not survive a restart.',
+      'Supply idempotencyKey to make deliberate retries safe: a repeated key replays the original result instead of creating a second task. Scoped per action and caller; TTL is configurable (15 minutes by default). Records live in the configured store — in memory by default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither store coordinates across instances, so a multi-replica deployment needs a shared backend; see docs/WRITE-SAFETY.md.',
   },
   inputSchema,
   outputSchema,

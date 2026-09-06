@@ -21,7 +21,7 @@ import {
   type ConnectorExecutionResult,
 } from './runtime/execute.js';
 import { createLogger, silentLogger, type Logger } from './runtime/logger.js';
-import { IdempotencyCache } from './runtime/idempotency.js';
+import { IdempotencyManager, createIdempotencyStore } from './runtime/idempotency.js';
 import { generateRequestId } from './runtime/request-id.js';
 import {
   NoCredentialProvider,
@@ -92,7 +92,10 @@ export class AsanaConnector implements DooConnector {
       config,
       client: this.client,
       logger: this.logger,
-      idempotencyCache: new IdempotencyCache<unknown>(),
+      idempotency: new IdempotencyManager({
+        store: createIdempotencyStore(config.idempotency.store, config.idempotency.filePath),
+        ttlMs: config.idempotency.ttlMs,
+      }),
     });
   }
 
@@ -141,6 +144,10 @@ export class AsanaConnector implements DooConnector {
    *
    * The returned workspace list doubles as the data source for workspace
    * selectors in the console, which avoids inventing a sixth action.
+   *
+   * Every outcome — connected, unauthenticated, or failed — carries the same
+   * `requestId` as the log line it produced, so a failing check is traceable
+   * exactly like an action call.
    */
   async testConnection(): Promise<ConnectionTestResult> {
     const requestId = generateRequestId();
@@ -160,6 +167,7 @@ export class AsanaConnector implements DooConnector {
         auth: { ...authInfo, scopes: [...authInfo.scopes] },
         checkedAt,
         latencyMs: Date.now() - startedAt,
+        requestId,
         error: {
           code: 'ASANA_AUTHENTICATION_ERROR',
           message: 'No Asana credentials are configured.',
@@ -201,6 +209,7 @@ export class AsanaConnector implements DooConnector {
         auth: { ...authInfo, scopes: [...authInfo.scopes] },
         checkedAt,
         latencyMs: Date.now() - startedAt,
+        requestId,
         error: null,
       };
     } catch (thrown) {
@@ -221,6 +230,7 @@ export class AsanaConnector implements DooConnector {
         auth: { ...authInfo, scopes: [...authInfo.scopes] },
         checkedAt,
         latencyMs: Date.now() - startedAt,
+        requestId,
         error: {
           code: error.code,
           message: error.message,

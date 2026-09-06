@@ -310,7 +310,7 @@ describe('users', () => {
   it('asana.get_current_user returns the account and its workspaces', async () => {
     const data = ok(await run('asana.get_current_user', {}));
 
-    expect((data['user'] as { name: string }).name).toBe('Idrees Khaled');
+    expect((data['user'] as { name: string }).name).toBe('Sam Rivera');
     expect((data['workspaces'] as unknown[]).length).toBeGreaterThan(0);
   });
 

@@ -36,7 +36,10 @@
     "format": "prettier --write \"**/*.{ts,tsx,json,md,yaml,yml,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md,yaml,yml,css}\"",
     "secrets:scan": "tsx scripts/scan-secrets.ts",
-    "verify": "npm run typecheck && npm run lint && npm run secrets:scan && npm test"
+    "verify": "npm run typecheck && npm run lint && npm run secrets:scan && npm run licenses:check && npm test && npm run test:frontend",
+    "licenses": "tsx scripts/license-report.ts",
+    "licenses:check": "tsx scripts/license-report.ts --check",
+    "generate:check": "tsx scripts/generate-all.ts --check"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -50,9 +53,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@readme/openapi-parser": "^9.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.18.13",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "concurrently": "^10.0.4",
     "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",

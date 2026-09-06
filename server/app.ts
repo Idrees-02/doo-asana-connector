@@ -30,8 +30,9 @@ import { generateRequestId } from '../src/runtime/request-id.js';
 import { ActivityLog } from './activity.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerMcpRoute } from './routes/mcp.js';
+import type { McpSecurityDecision } from '../src/runtime/mcp-security.js';
 import { registerAiRoutes } from './routes/ai.js';
-import { toJsonSchema } from '../src/schemas/json-schema.js';
+import { toJsonSchemaLenient } from '../src/schemas/json-schema.js';
 
 export interface ApiServer {
   readonly app: Express;
@@ -74,7 +75,13 @@ export function createApp(runtime: Bootstrapped): ApiServer {
    * the raw stream itself, and a parser that had already drained it would
    * leave the transport waiting on a body that never arrives.
    */
-  registerMcpRoute(app, runtime);
+  /*
+   * Throws for any configuration that would expose an unauthenticated MCP
+   * endpoint, which aborts `createApp` and therefore startup. Deliberately
+   * not wrapped in a try/catch: there is no recovery from "this deployment is
+   * insecure" other than not starting.
+   */
+  const mcpSecurity = registerMcpRoute(app, runtime);
 
   // Bounded body size: an unbounded JSON body is a trivial memory DoS.
   app.use(express.json({ limit: '1mb' }));
@@ -110,8 +117,10 @@ export function createApp(runtime: Bootstrapped): ApiServer {
         provider: MANIFEST.provider,
         builder: MANIFEST.builder,
       },
-      // describeConfig cannot carry a secret — see src/config.ts.
-      config: describeConfig(config),
+      // describeConfig cannot carry a secret — see src/config.ts. The MCP
+      // decision is passed in so the console reports the posture actually in
+      // force, not an inference from "is a token configured".
+      config: describeConfig(config, null, mcpSecurity),
       demoMode: config.mode === 'demo',
       demoControls:
         demoStore === undefined
@@ -165,8 +174,18 @@ export function createApp(runtime: Bootstrapped): ApiServer {
       examples: action.examples,
       // Generated from the same Zod schemas the runtime validates against,
       // so the documented contract is the enforced contract.
-      input: toJsonSchema(action.inputSchema),
-      output: toJsonSchema(action.outputSchema),
+      //
+      // Lenient here and strict in `npm run generate`: the Schema Inspector is
+      // a live documentation surface that must not 500 because one schema is
+      // exotic, and anything it had to widen arrives carrying an explicit
+      // `x-schema-degraded` marker rather than silently looking authoritative.
+      // The PUBLISHED contracts (openapi.yaml, connector.yaml) use the strict
+      // path and fail the build instead.
+      input: toJsonSchemaLenient(action.inputSchema, 'input', action.id),
+      // The output view, not the input view. Emitting the input view of an
+      // output schema would document the pre-transform shape of a value the
+      // caller only ever receives post-transform.
+      output: toJsonSchemaLenient(action.outputSchema, 'output', action.id),
     });
   });
 
@@ -251,9 +270,36 @@ export function createApp(runtime: Bootstrapped): ApiServer {
   });
 
   app.get('/api/health', (_req, res) => {
-    void buildHealth(runtime, activity)
+    void buildHealth(runtime, activity, mcpSecurity)
       .then((health) => res.status(health.status === 'healthy' ? 200 : 503).json(health))
       .catch((error: unknown) => sendUnexpected(res, error));
+  });
+
+  /*
+   * Liveness / readiness, kept deliberately cheap.
+   *
+   * `/api/health` calls Asana, which is the right thing for a human looking at
+   * the console and the wrong thing for a platform probing every few seconds:
+   * it spends rate-limit quota, and it makes the service look unhealthy
+   * whenever the PROVIDER is having a bad minute rather than this process.
+   * This endpoint answers "is this process up and correctly configured?" and
+   * nothing else.
+   *
+   * It is unauthenticated, so it carries no secret and no detail an attacker
+   * could use — a status, a version, and booleans.
+   */
+  app.get('/api/ready', (_req, res) => {
+    res.status(200).json({
+      status: 'ready',
+      version: MANIFEST.version,
+      mode: config.mode,
+      actions: MANIFEST.actions.length,
+      // The POSTURE, never the token. Reaching this line at all proves the
+      // security policy accepted the configuration: an insecure one throws
+      // during createApp, so the process never gets far enough to serve this.
+      mcp: { authRequired: mcpSecurity.authRequired, authSource: mcpSecurity.source },
+      uptimeSeconds: Math.floor(process.uptime()),
+    });
   });
 
   /* ---------------------------------------------------------------- */
@@ -417,7 +463,11 @@ export interface HealthReport {
  * data would be a serious bug, so it reuses the one operation already proven
  * side-effect-free by test.
  */
-async function buildHealth(runtime: Bootstrapped, activity: ActivityLog): Promise<HealthReport> {
+async function buildHealth(
+  runtime: Bootstrapped,
+  activity: ActivityLog,
+  mcpSecurity: McpSecurityDecision,
+): Promise<HealthReport> {
   const { connector, config } = runtime;
   const started = Date.now();
   const connection = await connector.testConnection();
@@ -452,6 +502,16 @@ async function buildHealth(runtime: Bootstrapped, activity: ActivityLog): Promis
       name: 'MCP Adapter',
       status: 'healthy',
       detail: `${MANIFEST.actions.length} tools exposed over ${config.mcp.transport}`,
+      latencyMs: null,
+    },
+    {
+      name: 'MCP Endpoint Security',
+      // An unauthenticated endpoint is only reachable on a loopback bind
+      // outside production — startup refuses otherwise — but it is still worth
+      // showing as a warning rather than letting it look normal.
+      status: mcpSecurity.authRequired ? 'healthy' : 'warning',
+      // The reason text is written to contain no secret; a test asserts it.
+      detail: mcpSecurity.reason,
       latencyMs: null,
     },
     {

@@ -189,6 +189,8 @@ function defaultMessageFor(code: ErrorCode): string {
       return 'The requested Asana resource was not found.';
     case ERROR_CODES.CONFLICT:
       return 'The task was modified after it was loaded.';
+    case ERROR_CODES.IDEMPOTENCY_CONFLICT:
+      return 'That idempotency key was already used for a different request.';
     case ERROR_CODES.UNAVAILABLE_LEGAL:
       return 'Asana blocked this request for legal reasons.';
     case ERROR_CODES.RATE_LIMITED:

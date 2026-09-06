@@ -739,8 +739,11 @@ paths:
         retryStrategy=manual_with_idempotency_key and leaves the decision to the caller.
 
         **Idempotency:** Supply idempotencyKey to make deliberate retries safe: a repeated key
-        replays the original result instead of creating a second task. Process-local and 15-minute
-        TTL — it does not survive a restart.
+        replays the original result instead of creating a second task. Scoped per action and caller;
+        TTL is configurable (15 minutes by default). Records live in the configured store — in
+        memory by default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither
+        store coordinates across instances, so a multi-replica deployment needs a shared backend;
+        see docs/WRITE-SAFETY.md.
       tags:
         - tasks
       requestBody:
@@ -802,8 +805,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Minimal task in a project
@@ -1089,7 +1094,8 @@ paths:
         429 and 5xx up to 2 further attempts, honouring Retry-After.
 
         **Idempotency:** Naturally idempotent, so an idempotency key is optional. Use
-        ifUnmodifiedSince to avoid overwriting a concurrent edit.
+        ifUnmodifiedSince for a stale-read guard that refuses the update when the task changed after
+        it was loaded — a narrowed race window, not an atomic compare-and-swap.
       tags:
         - tasks
       requestBody:
@@ -1149,9 +1155,11 @@ paths:
                           type: boolean
                       description: Fields to change. Omitted fields are left untouched; an explicit null clears the field.
                     ifUnmodifiedSince:
-                      description: The task's modifiedAt value when it was loaded. When supplied, the update is rejected
-                        with ASANA_CONFLICT if the task changed since then, preventing a silent
-                        overwrite of a concurrent edit.
+                      description: "The task's modifiedAt value when it was loaded. When supplied, the connector re-reads
+                        the task and rejects the update with ASANA_CONFLICT if modifiedAt has moved.
+                        This is a stale-read guard, not an atomic compare-and-swap: Asana offers no
+                        conditional write for tasks, so a writer committing between the re-read and
+                        the update is not detected."
                       type: string
                   required:
                     - taskId
@@ -1162,8 +1170,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Rename a task
@@ -1191,7 +1201,7 @@ paths:
                       dueOn: null
                   approved: true
               example4:
-                summary: Safe edit with concurrency check
+                summary: Safe edit with a stale-read guard
                 value:
                   input:
                     taskId: "1201234567890123"
@@ -1468,8 +1478,12 @@ paths:
         risking a double post.
 
         **Idempotency:** Supply idempotencyKey to make deliberate retries safe: a repeated key
-        replays the original result instead of posting again. Process-local, 15-minute TTL. The
-        console additionally warns before re-posting identical text within 60 seconds.
+        replays the original result instead of posting again. Scoped per action and caller; TTL is
+        configurable (15 minutes by default). Records live in the configured store — in memory by
+        default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither store
+        coordinates across instances, so a multi-replica deployment needs a shared backend; see
+        docs/WRITE-SAFETY.md. The console additionally warns before re-posting identical text within
+        60 seconds.
       tags:
         - comments
       requestBody:
@@ -1503,8 +1517,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Add a comment
@@ -2699,8 +2715,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Complete a task
@@ -3000,8 +3018,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Reopen a task
@@ -3308,8 +3328,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Assign to me
@@ -3630,8 +3652,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Set a due date
@@ -3944,8 +3968,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Set a description
@@ -4217,8 +4243,11 @@ paths:
         retryStrategy=manual_with_idempotency_key and leaves the decision to the caller.
 
         **Idempotency:** Supply idempotencyKey to make deliberate retries safe: a repeated key
-        replays the original result instead of creating a second object. Process-local, 15-minute
-        TTL — it does not survive a restart.
+        replays the original result instead of creating a second object. Scoped per action and
+        caller; TTL is configurable (15 minutes by default). Records live in the configured store —
+        in memory by default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart.
+        Neither store coordinates across instances, so a multi-replica deployment needs a shared
+        backend; see docs/WRITE-SAFETY.md.
       tags:
         - tasks
       requestBody:
@@ -4264,8 +4293,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Add a subtask
@@ -4920,8 +4951,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Add to a project
@@ -5091,8 +5124,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Remove from a project
@@ -5452,8 +5487,11 @@ paths:
         retryStrategy=manual_with_idempotency_key and leaves the decision to the caller.
 
         **Idempotency:** Supply idempotencyKey to make deliberate retries safe: a repeated key
-        replays the original result instead of creating a second object. Process-local, 15-minute
-        TTL — it does not survive a restart.
+        replays the original result instead of creating a second object. Scoped per action and
+        caller; TTL is configurable (15 minutes by default). Records live in the configured store —
+        in memory by default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart.
+        Neither store coordinates across instances, so a multi-replica deployment needs a shared
+        backend; see docs/WRITE-SAFETY.md.
       tags:
         - projects
       requestBody:
@@ -5516,8 +5554,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Minimal project
@@ -5802,8 +5842,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Rename
@@ -6266,8 +6308,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Add a member
@@ -6436,8 +6480,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Remove a member
@@ -6775,8 +6821,11 @@ paths:
         retryStrategy=manual_with_idempotency_key and leaves the decision to the caller.
 
         **Idempotency:** Supply idempotencyKey to make deliberate retries safe: a repeated key
-        replays the original result instead of creating a second object. Process-local, 15-minute
-        TTL — it does not survive a restart.
+        replays the original result instead of creating a second object. Scoped per action and
+        caller; TTL is configurable (15 minutes by default). Records live in the configured store —
+        in memory by default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart.
+        Neither store coordinates across instances, so a multi-replica deployment needs a shared
+        backend; see docs/WRITE-SAFETY.md.
       tags:
         - sections
       requestBody:
@@ -6821,8 +6870,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Add a section
@@ -7002,8 +7053,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Rename a section
@@ -7196,8 +7249,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Move a task
@@ -8271,8 +8326,11 @@ paths:
         retryStrategy=manual_with_idempotency_key and leaves the decision to the caller.
 
         **Idempotency:** Supply idempotencyKey to make deliberate retries safe: a repeated key
-        replays the original result instead of creating a second object. Process-local, 15-minute
-        TTL — it does not survive a restart.
+        replays the original result instead of creating a second object. Scoped per action and
+        caller; TTL is configurable (15 minutes by default). Records live in the configured store —
+        in memory by default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart.
+        Neither store coordinates across instances, so a multi-replica deployment needs a shared
+        backend; see docs/WRITE-SAFETY.md.
       tags:
         - tags
       requestBody:
@@ -8314,8 +8372,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Create a tag
@@ -8512,8 +8572,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Tag a task
@@ -8683,8 +8745,10 @@ paths:
                     approval.
                 idempotencyKey:
                   type: string
-                  description: Optional. Reuse when retrying so the operation is not applied twice. Process-local,
-                    15-minute TTL.
+                  description: "Optional. Reuse when retrying so the operation is not applied twice. Scoped per action
+                    and caller. Reusing a key with a DIFFERENT request body is rejected with
+                    ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not
+                    distributed: a multi-replica deployment needs a shared store."
             examples:
               example1:
                 summary: Untag a task
@@ -8976,6 +9040,7 @@ components:
             - ASANA_PERMISSION_DENIED
             - ASANA_NOT_FOUND
             - ASANA_CONFLICT
+            - ASANA_IDEMPOTENCY_CONFLICT
             - ASANA_UNAVAILABLE_LEGAL
             - ASANA_RATE_LIMITED
             - ASANA_SERVER_ERROR

@@ -22,7 +22,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -52,6 +52,17 @@ export interface McpHandlerOptions {
   readonly allowedHosts: readonly string[];
   /** When set, every MCP request must carry `Authorization: Bearer <token>`. */
   readonly authToken?: string | undefined;
+  /**
+   * Explicitly run with NO authentication.
+   *
+   * Required to omit `authToken`. Without it, a handler built with no token
+   * throws at construction rather than silently serving an open endpoint —
+   * the exact failure mode this transport previously had. The callers that
+   * may set it (`server/routes/mcp.ts`, `mcp/server.ts`) obtain permission
+   * from `resolveMcpSecurity`, which refuses in production and on an
+   * externally-bound socket.
+   */
+  readonly allowUnauthenticated?: boolean | undefined;
 }
 
 export interface McpHandler {
@@ -73,6 +84,33 @@ export function createMcpHandler(
   createServerInstance: () => McpServer,
   options: McpHandlerOptions,
 ): McpHandler {
+  /*
+   * FAIL CLOSED.
+   *
+   * The previous behaviour was `if (expected === undefined) return true` — an
+   * absent token authorized everyone, and the deployed case was covered by a
+   * log line. Silence is now impossible: building an unauthenticated handler
+   * requires saying so, in a named parameter, at the call site.
+   */
+  if (options.authToken === undefined && options.allowUnauthenticated !== true) {
+    throw new Error(
+      'createMcpHandler: refusing to build an unauthenticated MCP handler. ' +
+        'Pass authToken, or set allowUnauthenticated: true to state the choice explicitly. ' +
+        'See src/runtime/mcp-security.ts for when that is permitted.',
+    );
+  }
+
+  /*
+   * Pre-hashed once at construction.
+   *
+   * Comparing digests rather than the tokens themselves keeps the compared
+   * buffers a fixed 32 bytes, so the comparison leaks neither content nor
+   * LENGTH — `a.length === b.length && timingSafeEqual(...)` did leak length,
+   * since a wrong-length guess returns before the constant-time step runs.
+   */
+  const expectedDigest =
+    options.authToken === undefined ? undefined : sha256(options.authToken);
+
   const sessions = new Map<string, StreamableHTTPServerTransport>();
   const lastSeen = new Map<string, number>();
 
@@ -89,18 +127,24 @@ export function createMcpHandler(
   sweeper.unref();
 
   /**
+   * Transport admission control.
+   *
    * The endpoint executes real writes against a real workspace using the
-   * server's own credential, so an open deployment is an open door. Compared
-   * in constant time: a byte-by-byte early exit leaks the token by timing.
+   * server's own credential, so an open deployment is an open door.
+   *
+   * This runs BEFORE any body is read, which is what keeps authentication and
+   * approval independent: `approved: true` lives in a JSON-RPC request body
+   * that an unauthenticated caller never gets to send. Approval is consent to
+   * a write; it is not, and can never become, a credential.
    */
   function authorized(req: IncomingMessage): boolean {
-    const expected = options.authToken;
-    if (expected === undefined) return true;
+    if (expectedDigest === undefined) return true; // explicitly open, see above
 
-    const supplied = header(req, 'authorization')?.replace(/^Bearer\s+/i, '') ?? '';
-    const a = Buffer.from(supplied);
-    const b = Buffer.from(expected);
-    return a.length === b.length && timingSafeEqual(a, b);
+    const supplied = bearerToken(req);
+    if (supplied === undefined) return false;
+
+    // Both sides are 32-byte digests, so this is genuinely constant-time.
+    return timingSafeEqual(sha256(supplied), expectedDigest);
   }
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -199,11 +243,14 @@ export function createMcpHandler(
     },
 
     handleHealth: (res) => {
+      // Deliberately unauthenticated so platform probes work, and therefore
+      // deliberately free of anything an unauthenticated caller should not
+      // see: a boolean and a count, never the token or the session ids.
       json(res, 200, {
         status: 'ok',
         transport: 'streamable-http',
         sessions: sessions.size,
-        authRequired: options.authToken !== undefined,
+        authRequired: expectedDigest !== undefined,
       });
     },
 
@@ -250,6 +297,7 @@ export async function startHttpTransport(
       );
     },
     authToken: options?.authToken,
+    allowUnauthenticated: options?.allowUnauthenticated,
   });
 
   const httpServer = createServer((req, res) => {
@@ -301,6 +349,29 @@ function header(req: IncomingMessage, name: string): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function sha256(value: string): Buffer {
+  return createHash('sha256').update(value, 'utf8').digest();
+}
+
+/**
+ * Extract the bearer token, strictly.
+ *
+ * The scheme is mandatory. A previous version stripped an optional `Bearer `
+ * prefix and compared whatever was left, which meant a bare
+ * `Authorization: <token>` was also accepted — a second, undocumented way in.
+ * One accepted form is easier to reason about and to test.
+ *
+ * Node discards duplicate `authorization` headers and keeps the first, so a
+ * second header cannot be used to smuggle a different credential past this.
+ */
+function bearerToken(req: IncomingMessage): string | undefined {
+  const raw = header(req, 'authorization');
+  if (raw === undefined) return undefined;
+
+  const match = /^Bearer[ \t]+(\S+)[ \t]*$/i.exec(raw.trim());
+  return match?.[1];
+}
+
 function json(res: ServerResponse, status: number, payload: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(payload));
@@ -320,6 +391,15 @@ async function readJsonBody(req: IncomingMessage, res: ServerResponse): Promise<
         error: { code: -32000, message: 'Request body too large.' },
         id: null,
       });
+      /*
+       * Tear the socket down rather than just answering.
+       *
+       * Answering alone leaves the sender still uploading into a request
+       * nobody is reading, which holds the connection (and its buffered
+       * bytes) open — the opposite of what a body limit is for. Destroying
+       * the stream is what makes the limit actually bound memory.
+       */
+      req.destroy();
       return undefined;
     }
     chunks.push(buf);

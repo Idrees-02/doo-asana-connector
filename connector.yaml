@@ -107,8 +107,11 @@ actions:
         on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
         the decision to the caller.
       idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
-        the original result instead of creating a second task. Process-local and 15-minute TTL — it
-        does not survive a restart."
+        the original result instead of creating a second task. Scoped per action and caller; TTL is
+        configurable (15 minutes by default). Records live in the configured store — in memory by
+        default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither store
+        coordinates across instances, so a multi-replica deployment needs a shared backend; see
+        docs/WRITE-SAFETY.md."
   - id: asana.update_task
     name: Update Task
     description: Update selected fields on an Asana task. Omitted fields are left untouched; an explicit
@@ -131,7 +134,8 @@ actions:
       retryBehavior: Safe to retry, because the operation is idempotent. The client retries 429 and 5xx up
         to 2 further attempts, honouring Retry-After.
       idempotencyBehavior: Naturally idempotent, so an idempotency key is optional. Use ifUnmodifiedSince
-        to avoid overwriting a concurrent edit.
+        for a stale-read guard that refuses the update when the task changed after it was loaded — a
+        narrowed race window, not an atomic compare-and-swap.
   - id: asana.add_comment
     name: Add Comment
     description: Post a plain-text comment onto an Asana task.
@@ -152,8 +156,12 @@ actions:
         the connector reports retryStrategy=manual_with_idempotency_key rather than risking a double
         post.
       idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
-        the original result instead of posting again. Process-local, 15-minute TTL. The console
-        additionally warns before re-posting identical text within 60 seconds."
+        the original result instead of posting again. Scoped per action and caller; TTL is
+        configurable (15 minutes by default). Records live in the configured store — in memory by
+        default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither store
+        coordinates across instances, so a multi-replica deployment needs a shared backend; see
+        docs/WRITE-SAFETY.md. The console additionally warns before re-posting identical text within
+        60 seconds."
   - id: asana.get_task
     name: Get Task
     description: Fetch a single Asana task by id, with assignee, due date, projects and tags.
@@ -330,8 +338,11 @@ actions:
         on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
         the decision to the caller.
       idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
-        the original result instead of creating a second object. Process-local, 15-minute TTL — it
-        does not survive a restart."
+        the original result instead of creating a second object. Scoped per action and caller; TTL
+        is configurable (15 minutes by default). Records live in the configured store — in memory by
+        default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither store
+        coordinates across instances, so a multi-replica deployment needs a shared backend; see
+        docs/WRITE-SAFETY.md."
   - id: asana.list_subtasks
     name: List Subtasks
     description: List the subtasks of an Asana task.
@@ -430,8 +441,11 @@ actions:
         on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
         the decision to the caller.
       idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
-        the original result instead of creating a second object. Process-local, 15-minute TTL — it
-        does not survive a restart."
+        the original result instead of creating a second object. Scoped per action and caller; TTL
+        is configurable (15 minutes by default). Records live in the configured store — in memory by
+        default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither store
+        coordinates across instances, so a multi-replica deployment needs a shared backend; see
+        docs/WRITE-SAFETY.md."
   - id: asana.update_project
     name: Update Project
     description: Update selected fields on an Asana project. Omitted fields are left untouched; an
@@ -550,8 +564,11 @@ actions:
         on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
         the decision to the caller.
       idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
-        the original result instead of creating a second object. Process-local, 15-minute TTL — it
-        does not survive a restart."
+        the original result instead of creating a second object. Scoped per action and caller; TTL
+        is configurable (15 minutes by default). Records live in the configured store — in memory by
+        default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither store
+        coordinates across instances, so a multi-replica deployment needs a shared backend; see
+        docs/WRITE-SAFETY.md."
   - id: asana.update_section
     name: Update Section
     description: Rename an Asana section.
@@ -704,8 +721,11 @@ actions:
         on timeout), so the connector reports retryStrategy=manual_with_idempotency_key and leaves
         the decision to the caller.
       idempotencyBehavior: "Supply idempotencyKey to make deliberate retries safe: a repeated key replays
-        the original result instead of creating a second object. Process-local, 15-minute TTL — it
-        does not survive a restart."
+        the original result instead of creating a second object. Scoped per action and caller; TTL
+        is configurable (15 minutes by default). Records live in the configured store — in memory by
+        default, or on disk with IDEMPOTENCY_STORE=file, which survives a restart. Neither store
+        coordinates across instances, so a multi-replica deployment needs a shared backend; see
+        docs/WRITE-SAFETY.md."
   - id: asana.add_tag_to_task
     name: Add Tag to Task
     description: Attach an existing tag to an Asana task.

@@ -8,15 +8,38 @@
 
 import { bootstrap } from '../src/index.js';
 import { createApp } from './app.js';
+import { InsecureMcpConfigurationError } from '../src/runtime/mcp-security.js';
 
 function main(): void {
   const runtime = bootstrap();
-  const { app } = createApp(runtime);
+
+  /*
+   * `createApp` mounts /mcp, which refuses to build for any configuration
+   * that would expose an unauthenticated endpoint. Catching it here only to
+   * print the remediation legibly — the process still exits non-zero, and
+   * nothing binds a socket.
+   */
+  let app;
+  try {
+    ({ app } = createApp(runtime));
+  } catch (error) {
+    if (error instanceof InsecureMcpConfigurationError) {
+      process.stderr.write(`\n${error.message}\n\n`);
+      process.exit(1);
+    }
+    throw error;
+  }
+
   const { config, logger } = runtime;
 
-  const server = app.listen(config.server.port, () => {
+  // Bound explicitly rather than to every interface by default: in
+  // development this keeps the API off the local network, which is also what
+  // makes the unauthenticated local MCP mode safe to offer.
+  const server = app.listen(config.server.port, config.server.host, () => {
     logger.info('API listening', {
+      host: config.server.host,
       port: config.server.port,
+      externallyBound: config.server.externallyBound,
       mode: config.mode,
       cors: config.server.corsOrigin,
     });

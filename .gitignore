@@ -57,3 +57,13 @@ IMG_8810.jpg
 # Source 3D models. Nothing on the site renders one any more; this only keeps
 # a stray export from being committed by accident.
 *.glb
+
+# Local Claude Code agent tooling. Removed from the repository entirely:
+# unrelated to the connector, no source file referenced it, and several
+# vendored skills shipped without a licence. Ignored so a stray copy cannot
+# be committed back.
+claude/
+
+# Durable idempotency records (IDEMPOTENCY_STORE=file). Runtime state, and
+# they contain user data (task names, comment text), so never committed.
+.idempotency/

@@ -12,14 +12,18 @@
  *   npm run generate
  */
 
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { stringify } from 'yaml';
 
-import { ACTIONS } from '../src/actions/index.js';
+import { ACTIONS, REQUIRED_ACTION_IDS } from '../src/actions/index.js';
 import { MANIFEST, CONNECTOR_VERSION } from '../src/manifest.js';
-import { toJsonSchema, toOutputJsonSchema } from '../src/schemas/json-schema.js';
+import {
+  assertSchemasRepresentable,
+  toJsonSchema,
+  toOutputJsonSchema,
+} from '../src/schemas/json-schema.js';
 import { ALL_ERROR_CODES, ERROR_CODE_META } from '../src/errors/codes.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -80,7 +84,7 @@ function generateOpenApi(): string {
                 type: 'object',
                 required: action.safety.requiresApproval ? ['input', 'approved'] : ['input'],
                 properties: {
-                  input: toJsonSchema(action.inputSchema),
+                  input: toJsonSchema(action.inputSchema, 'input', action.id),
                   ...(action.safety.requiresApproval
                     ? {
                         approved: {
@@ -91,7 +95,7 @@ function generateOpenApi(): string {
                         idempotencyKey: {
                           type: 'string',
                           description:
-                            'Optional. Reuse when retrying so the operation is not applied twice. Process-local, 15-minute TTL.',
+                            'Optional. Reuse when retrying so the operation is not applied twice. Scoped per action and caller. Reusing a key with a DIFFERENT request body is rejected with ASANA_IDEMPOTENCY_CONFLICT rather than replaying the wrong result. Not distributed: a multi-replica deployment needs a shared store.',
                         },
                       }
                     : {}),
@@ -124,7 +128,7 @@ function generateOpenApi(): string {
                   required: ['ok', 'data', 'meta'],
                   properties: {
                     ok: { type: 'boolean', enum: [true] },
-                    data: toOutputJsonSchema(action.outputSchema),
+                    data: toOutputJsonSchema(action.outputSchema, action.id),
                     meta: { $ref: '#/components/schemas/ExecutionMeta' },
                   },
                 },
@@ -392,8 +396,52 @@ function errorResponse(description: string): Record<string, unknown> {
 /* -------------------------------------------------------------------------- */
 
 function main(): void {
+  /*
+   * Fail closed BEFORE writing anything.
+   *
+   * A schema that cannot be represented exactly would otherwise be published
+   * as a permissive object, and a permissive published contract is worse than
+   * a missing one because callers trust it.
+   */
+  assertSchemasRepresentable(ACTIONS);
+
   const connectorYaml = generateConnectorYaml();
   const openApiYaml = generateOpenApi();
+
+  /*
+   * Content assertions run BEFORE the write and before the --check branch, so
+   * neither mode can pass on output that is missing a required action or has
+   * serialized a credential.
+   */
+  assertContentSound(connectorYaml, openApiYaml);
+
+  /*
+   * `--check` verifies the committed files match what the code would produce,
+   * without writing. CI runs it so a stale contract is a build failure rather
+   * than something a reviewer has to notice, and it works locally too — a
+   * `git diff` after regenerating cannot tell "stale" from "uncommitted".
+   */
+  if (process.argv.includes('--check')) {
+    const stale: string[] = [];
+    for (const [name, expected] of [
+      ['connector.yaml', connectorYaml],
+      ['openapi.yaml', openApiYaml],
+    ] as const) {
+      const actual = readFileSync(join(ROOT, name), 'utf8');
+      if (actual !== expected) stale.push(name);
+    }
+
+    if (stale.length > 0) {
+      console.error(
+        `\n${stale.join(' and ')} ${stale.length === 1 ? 'is' : 'are'} out of date with the code.\n` +
+          'Run `npm run generate` and commit the result.\n',
+      );
+      process.exit(1);
+    }
+
+    console.log('generate:check — connector.yaml and openapi.yaml are current');
+    return;
+  }
 
   writeFileSync(join(ROOT, 'connector.yaml'), connectorYaml, 'utf8');
   writeFileSync(join(ROOT, 'openapi.yaml'), openApiYaml, 'utf8');
@@ -404,21 +452,27 @@ function main(): void {
   console.log(
     `Write actions requiring approval: ${MANIFEST.actions.filter((a) => a.requiresApproval).length}`,
   );
+}
 
-  // A sanity check on the generated content itself: the required ids must all
-  // be present, spelled exactly as assigned.
-  for (const id of ['asana.list_projects', 'asana.list_project_tasks', 'asana.create_task', 'asana.update_task', 'asana.add_comment']) {
+/**
+ * Assertions about the generated CONTENT, as opposed to the schemas it came
+ * from. Cheap, and each one closes a way the published contract could be
+ * silently wrong.
+ */
+function assertContentSound(connectorYaml: string, openApiYaml: string): void {
+  // The required ids must all be present, spelled exactly as assigned.
+  for (const id of REQUIRED_ACTION_IDS) {
     if (!connectorYaml.includes(id) || !openApiYaml.includes(id)) {
       throw new Error(`Generated output is missing the required action "${id}".`);
     }
   }
 
-  // And a last-line-of-defence check that nothing secret was serialized.
+  // A last line of defence against serializing anything secret.
   for (const [name, content] of [
     ['connector.yaml', connectorYaml],
     ['openapi.yaml', openApiYaml],
   ] as const) {
-    if (/1\/\d{10,}:[0-9a-f]{16,}/.test(content) || /Bearer\s+\S{16,}/.test(content)) {
+    if (/[12]\/\d{10,}:[0-9a-f]{16,}/.test(content) || /Bearer\s+\S{16,}/.test(content)) {
       throw new Error(`${name} appears to contain a credential. Generation aborted.`);
     }
   }

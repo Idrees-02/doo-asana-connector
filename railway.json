@@ -5,7 +5,7 @@
   },
   "deploy": {
     "startCommand": "npm start",
-    "healthcheckPath": "/api/connector/status",
+    "healthcheckPath": "/api/ready",
     "restartPolicyType": "ON_FAILURE"
   }
 }

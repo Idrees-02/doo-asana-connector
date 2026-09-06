@@ -22,6 +22,8 @@
  * the adapter runs the connector in silent mode by default.
  */
 
+import { pathToFileURL } from 'node:url';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -185,10 +187,30 @@ async function main(): Promise<void> {
 
   if (config.mcp.transport === 'http') {
     const { startHttpTransport } = await import('./http-transport.js');
+    const { describeEphemeralToken, resolveMcpSecurity } = await import(
+      '../src/runtime/mcp-security.js'
+    );
+
+    /*
+     * The same fail-closed policy the console's /mcp route applies. Running
+     * the standalone transport must not be a way around it — that would make
+     * the security model depend on which entry point someone happened to use.
+     */
+    const security = resolveMcpSecurity({
+      nodeEnv: config.nodeEnv,
+      authToken: config.mcp.authToken,
+      allowUnauthenticated: config.mcp.allowUnauthenticated,
+      bindHost: config.server.host,
+    });
+
+    const banner = describeEphemeralToken(security, `:${config.mcp.httpPort}/mcp`);
+    if (banner !== '') process.stderr.write(banner);
+
     // HTTP serves many clients at once, so it builds a server per session
     // rather than sharing one. stdio is one client by construction.
     await startHttpTransport(() => createMcpServer(connector), config.mcp.httpPort, {
-      authToken: config.mcp.authToken,
+      authToken: security.token,
+      allowUnauthenticated: !security.authRequired,
     });
     return;
   }
@@ -203,10 +225,35 @@ async function main(): Promise<void> {
   );
 }
 
-// Only run when executed directly, so tests can import the builders above.
-if (process.argv[1]?.includes('server') === true) {
+/**
+ * Only run when this module IS the process entry point.
+ *
+ * The previous check was `process.argv[1]?.includes('server')`, which is true
+ * for `node dist/server/index.js` — so starting the API server also started a
+ * stdio MCP server inside the same process, competing for stdout. Comparing
+ * resolved paths is exact: it is true for `tsx mcp/server.ts` and
+ * `node dist/mcp/server.js`, and false for every import.
+ */
+function isEntryPoint(): boolean {
+  const entry = process.argv[1];
+  if (entry === undefined) return false;
+  try {
+    return import.meta.url === pathToFileURL(entry).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   main().catch((error: unknown) => {
-    process.stderr.write(`MCP server failed to start: ${String(error)}\n`);
+    // An insecure-configuration refusal carries its own remediation, so print
+    // the message plainly rather than burying it behind a generic prefix.
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(
+      error instanceof Error && error.name === 'InsecureMcpConfigurationError'
+        ? `\n${message}\n\n`
+        : `MCP server failed to start: ${message}\n`,
+    );
     process.exit(1);
   });
 }

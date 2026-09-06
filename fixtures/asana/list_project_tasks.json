@@ -1,54 +1,76 @@
 {
   "data": [
     {
-      "gid": "1217301043120150",
+      "gid": "774000000000001",
       "assignee": null,
       "completed": true,
-      "created_at": "2026-08-08T23:56:13.427Z",
+      "created_at": "2026-01-05T09:00:20.000Z",
       "due_on": null,
-      "modified_at": "2026-08-08T23:56:16.621Z",
-      "name": "[connector-smoke] 2026-08-08T23:56:12.928Z",
-      "notes": "Updated by the smoke test.",
-      "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390/task/1217301043120150"
+      "modified_at": "2026-01-05T09:00:30.000Z",
+      "name": "Synthetic Task 001",
+      "notes": "Synthetic notes.",
+      "permalink_url": "https://app.asana.com/1/772000000000001/project/773000000000001/task/774000000000001"
     },
     {
-      "gid": "1217301120255878",
+      "gid": "774000000000002",
+      "assignee": null,
+      "completed": true,
+      "created_at": "2026-01-05T09:00:40.000Z",
+      "due_on": null,
+      "modified_at": "2026-01-05T09:00:50.000Z",
+      "name": "Synthetic Task 002",
+      "notes": "Synthetic notes.",
+      "permalink_url": "https://app.asana.com/1/772000000000001/project/773000000000001/task/774000000000002"
+    },
+    {
+      "gid": "774000000000003",
+      "assignee": null,
+      "completed": true,
+      "created_at": "2026-01-05T09:01:00.000Z",
+      "due_on": null,
+      "modified_at": "2026-01-05T09:01:10.000Z",
+      "name": "Synthetic Task 003",
+      "notes": "Synthetic notes.",
+      "permalink_url": "https://app.asana.com/1/772000000000001/project/773000000000001/task/774000000000003"
+    },
+    {
+      "gid": "774000000000004",
       "assignee": {
-        "gid": "1217300136129834",
-        "name": "Idrees Khaled"
+        "gid": "771000000000001",
+        "name": "Synthetic Builder"
       },
       "completed": false,
-      "created_at": "2026-08-08T23:33:57.872Z",
+      "created_at": "2026-01-05T09:01:20.000Z",
       "due_on": "2026-08-11",
-      "modified_at": "2026-08-10T21:01:11.813Z",
-      "name": "Task 1",
+      "modified_at": "2026-01-05T09:01:30.000Z",
+      "name": "Synthetic Task 004",
       "notes": "",
-      "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390/task/1217301120255878"
+      "permalink_url": "https://app.asana.com/1/772000000000001/project/773000000000001/task/774000000000004"
     },
     {
-      "gid": "1217301120255880",
+      "gid": "774000000000005",
       "assignee": {
-        "gid": "1217300136129834",
-        "name": "Idrees Khaled"
+        "gid": "771000000000001",
+        "name": "Synthetic Builder"
       },
       "completed": false,
-      "created_at": "2026-08-08T23:33:58.077Z",
+      "created_at": "2026-01-05T09:01:40.000Z",
       "due_on": "2026-08-12",
-      "modified_at": "2026-08-08T23:33:59.717Z",
-      "name": "Task 2",
+      "modified_at": "2026-01-05T09:01:50.000Z",
+      "name": "Synthetic Task 005",
       "notes": "",
-      "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390/task/1217301120255880"
+      "permalink_url": "https://app.asana.com/1/772000000000001/project/773000000000001/task/774000000000005"
     },
     {
-      "gid": "1217301120255882",
+      "gid": "774000000000006",
       "assignee": null,
       "completed": false,
-      "created_at": "2026-08-08T23:33:58.213Z",
+      "created_at": "2026-01-05T09:02:00.000Z",
       "due_on": "2026-08-13",
-      "modified_at": "2026-08-08T23:33:58.459Z",
-      "name": "Task 3",
+      "modified_at": "2026-01-05T09:02:10.000Z",
+      "name": "Synthetic Task 006",
       "notes": "",
-      "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390/task/1217301120255882"
+      "permalink_url": "https://app.asana.com/1/772000000000001/project/773000000000001/task/774000000000006"
     }
   ],
   "next_page": null

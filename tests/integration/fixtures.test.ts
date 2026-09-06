@@ -3,9 +3,11 @@
  *
  * The rest of the suite runs against an in-memory Asana that this repository
  * also wrote, which proves the connector is consistent with itself but not
- * that it is consistent with Asana. These fixtures are unmodified responses
- * captured from the real API (emails redacted, nothing else touched), replayed
- * through the connector.
+ * that it is consistent with Asana. These fixtures were captured from the real
+ * API and then anonymized: every wire SHAPE is exactly what Asana returned,
+ * every VALUE is synthetic. See fixtures/asana/README.md for the substitution
+ * table, and tests/integration/privacy.test.ts for the check that stops real
+ * data reappearing.
  *
  * That makes them the one place a field Asana actually returns — `gid` rather
  * than `id`, `due_on` rather than `dueDate`, `next_page` rather than a cursor —
@@ -70,7 +72,7 @@ describe('captured Asana responses', () => {
 
     const result = await connector.execute({
       actionId: 'asana.list_project_tasks',
-      input: { projectId: '1217300991109390' },
+      input: { projectId: '773000000000001' },
     });
 
     expect(result.ok).toBe(true);
@@ -95,7 +97,7 @@ describe('captured Asana responses', () => {
 
     const result = await connector.execute({
       actionId: 'asana.get_task',
-      input: { taskId: '1217301043120150' },
+      input: { taskId: '774000000000001' },
     });
 
     expect(result.ok).toBe(true);
@@ -121,8 +123,11 @@ describe('captured Asana responses', () => {
 
     expect(user.id).toMatch(/^\d+$/);
     expect(workspaces.length).toBeGreaterThan(0);
-    // Proof the fixture itself carries no real address.
+    // Proof the fixture itself carries no real account: a reserved example.com
+    // address, a synthetic display name, and a workspace named as such.
     expect(user.email).toBe('builder@example.com');
+    expect(user.name).toBe('Synthetic Builder');
+    expect(workspaces[0]?.name).toBe('DOO Synthetic Workspace');
   });
 
   it('parses real comment stories', async () => {
@@ -130,7 +135,7 @@ describe('captured Asana responses', () => {
 
     const result = await connector.execute({
       actionId: 'asana.list_comments',
-      input: { taskId: '1217301043120150' },
+      input: { taskId: '774000000000001' },
     });
 
     expect(result.ok).toBe(true);
@@ -174,6 +179,9 @@ describe('captured Asana responses', () => {
       'list_project_sections',
       'list_comments',
       'error_not_found',
+      'create_task',
+      'update_task',
+      'add_comment',
     ];
 
     for (const name of names) {
@@ -182,6 +190,128 @@ describe('captured Asana responses', () => {
       expect(raw).not.toMatch(/1\/\d{10,}:[0-9a-f]{8,}/);
       expect(raw.toLowerCase()).not.toContain('bearer ');
       expect(raw).not.toMatch(/gsk_[A-Za-z0-9]{20,}/);
+    }
+  });
+});
+
+/* ========================================================================== */
+/* Captured WRITE responses                                                    */
+/* ========================================================================== */
+
+/**
+ * The gap this section closes.
+ *
+ * Every other write test in this repository runs against the in-memory Asana
+ * that this repository also wrote — which proves the connector is consistent
+ * with itself, and proves nothing about whether it parses what Asana actually
+ * returns from a POST or a PUT. The three required write actions had no
+ * captured provider response behind them at all.
+ *
+ * These fixtures are real `POST /tasks`, `PUT /tasks/{gid}` and
+ * `POST /tasks/{gid}/stories` responses (anonymized — see the file header),
+ * replayed through the real action code. If Asana changes a write response
+ * shape, these fail before users do.
+ */
+describe('captured Asana WRITE responses', () => {
+  it('parses a real POST /tasks response', async () => {
+    const { connector, fake } = connectorFor(fixture('create_task'));
+
+    const result = await connector.execute({
+      actionId: 'asana.create_task',
+      input: { projectId: '773000000000001', name: 'Synthetic Task 007' },
+      approved: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const { task, created } = result.data as {
+      task: { id: string; name: string; completed: boolean; url: string | null; modifiedAt: string | null };
+      created: boolean;
+    };
+
+    expect(created).toBe(true);
+    // Asana returns `gid`; the connector normalizes it to `id`.
+    expect(task.id).toMatch(/^\d+$/);
+    expect(task.name.length).toBeGreaterThan(0);
+    expect(task.completed).toBe(false);
+    // `modifiedAt` is what a caller feeds back as `ifUnmodifiedSince`, so it
+    // has to survive the create response rather than arriving null.
+    expect(task.modifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    // The real request Asana requires: a POST carrying the `{ data: … }`
+    // envelope, not a bare body.
+    expect(fake.calls[0]?.method).toBe('POST');
+    expect(fake.calls[0]?.body).toMatchObject({ data: { name: 'Synthetic Task 007' } });
+  });
+
+  it('parses a real PUT /tasks/{gid} response', async () => {
+    const { connector, fake } = connectorFor(fixture('update_task'));
+
+    const result = await connector.execute({
+      actionId: 'asana.update_task',
+      input: { taskId: '774000000000007', patch: { notes: 'Updated by the fixture capture.' } },
+      approved: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const { task, updatedFields } = result.data as {
+      task: { id: string; notes: string | null };
+      updatedFields: string[];
+    };
+
+    expect(task.id).toMatch(/^\d+$/);
+    // Only the field the caller named is reported as changed.
+    expect(updatedFields).toEqual(['notes']);
+
+    expect(fake.calls[0]?.method).toBe('PUT');
+    expect(fake.calls[0]?.body).toMatchObject({ data: { notes: 'Updated by the fixture capture.' } });
+  });
+
+  it('parses a real POST /tasks/{gid}/stories response', async () => {
+    const { connector, fake } = connectorFor(fixture('add_comment'));
+
+    const result = await connector.execute({
+      actionId: 'asana.add_comment',
+      input: { taskId: '774000000000007', text: 'Comment posted by the fixture capture.' },
+      approved: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const { comment } = result.data as {
+      comment: {
+        id: string;
+        text: string;
+        createdAt: string | null;
+        createdBy: { name: string | null } | null;
+      };
+    };
+
+    expect(comment.id).toMatch(/^\d+$/);
+    expect(comment.text.length).toBeGreaterThan(0);
+    // Asana returns `created_by`; the connector normalizes it to `createdBy`.
+    // This is the assertion that catches a rename on either side.
+    expect(comment.createdBy?.name).toBe('Synthetic Builder');
+    expect(comment.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    expect(fake.calls[0]?.method).toBe('POST');
+    expect(new URL(fake.calls[0]?.url ?? '').pathname).toBe(
+      '/api/1.0/tasks/774000000000007/stories',
+    );
+  });
+
+  it('covers every required action with a captured provider response', () => {
+    /*
+     * The structural assertion. Read fixtures alone left the three write
+     * actions — the consequential ones — resting entirely on a provider this
+     * repository wrote itself.
+     */
+    for (const name of ['list_projects', 'list_project_tasks', 'create_task', 'update_task', 'add_comment']) {
+      expect(fixture(name)).toBeDefined();
     }
   });
 });

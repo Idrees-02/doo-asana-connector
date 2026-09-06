@@ -27,6 +27,7 @@ import { DemoBanner } from '@/components/layout/DemoBanner';
 import { AppShell } from '@/components/layout/AppShell';
 import { CreateTaskDialog } from '@/components/tasks/CreateTaskDialog';
 import { ErrorState } from '@/components/ui';
+import { Mcp } from '@/pages/Mcp';
 
 function renderPage(ui: ReactNode, route = '/') {
   const queryClient = new QueryClient({
@@ -225,7 +226,7 @@ describe('Tasks', () => {
 
     const table = await screen.findByRole('table');
     expect(await within(table).findByText('Prepare launch documentation')).toBeInTheDocument();
-    expect(within(table).getByText('Idrees Khaled')).toBeInTheDocument();
+    expect(within(table).getByText('Sam Rivera')).toBeInTheDocument();
   });
 
   it('opens the task drawer with details and a comment composer', async () => {
@@ -445,5 +446,125 @@ describe('navigation', () => {
     expect(within(table).getByRole('columnheader', { name: 'Project' })).toBeInTheDocument();
     // A caption gives screen-reader users the table's purpose.
     expect(table.querySelector('caption')).toBeTruthy();
+  });
+});
+
+/* ========================================================================== */
+/* MCP endpoint posture                                                        */
+/* ========================================================================== */
+
+/** Swap the status endpoint's MCP block for one specific posture. */
+function withMcpPosture(mcp: Record<string, unknown>) {
+  server.use(
+    http.get('/api/connector/status', () =>
+      HttpResponse.json({
+        connector: {
+          name: 'asana-connector',
+          displayName: 'Asana Connector',
+          version: '1.0.0',
+          provider: 'asana',
+          builder: 'Idrees Khaled',
+        },
+        config: {
+          mode: 'demo',
+          modeReason: 'test',
+          nodeEnv: 'test',
+          asana: {
+            baseUrl: 'https://app.asana.com/api/1.0',
+            rateLimitRpm: 140,
+            timeoutMs: 15000,
+            maxConcurrency: 8,
+            defaultWorkspace: null,
+          },
+          auth: {
+            patConfigured: false,
+            oauthConfigured: false,
+            oauthRedirectUri: null,
+            oauthScopes: [],
+            credentialFingerprint: null,
+          },
+          server: {
+            port: 8787,
+            host: '127.0.0.1',
+            externallyBound: false,
+            corsOrigin: 'http://localhost:5173',
+            publicBaseUrl: null,
+          },
+          mcp: { transport: 'http', httpPort: 8788, publicUrl: null, ...mcp },
+          credentialEncryptionEnabled: false,
+        },
+        demoMode: true,
+        demoControls: { fault: 'none', latencyMs: [0, 0] },
+        client: { totalRequests: 0, totalRetries: 0, rateLimitHits: 0, inFlight: 0 },
+      }),
+    ),
+  );
+}
+
+describe('MCP endpoint posture', () => {
+  it('shows a configured token as a healthy, guarded endpoint', async () => {
+    withMcpPosture({
+      authRequired: true,
+      authSource: 'configured',
+      authReason: 'MCP_AUTH_TOKEN is configured.',
+    });
+
+    renderPage(<Mcp />);
+
+    expect(await screen.findByText(/Bearer token required/i)).toBeInTheDocument();
+    expect(screen.queryByText(/UNAUTHENTICATED/i)).not.toBeInTheDocument();
+  });
+
+  it('warns unmissably when the endpoint is deliberately open', async () => {
+    withMcpPosture({
+      authRequired: false,
+      authSource: 'explicitly-open',
+      authReason: 'MCP_ALLOW_UNAUTHENTICATED=true on a loopback bind in development.',
+    });
+
+    renderPage(<Mcp />);
+
+    // "No token set" understated it. An open endpoint drives a real workspace
+    // with the server's credential, and the console should say so plainly —
+    // in the status pill AND in an explanatory warning, hence two matches.
+    const mentions = await screen.findAllByText(/UNAUTHENTICATED/i);
+    expect(mentions.length).toBeGreaterThanOrEqual(2);
+    expect(mentions.some((el) => el.textContent === 'UNAUTHENTICATED')).toBe(true);
+    expect(
+      screen.getByText(/executes real actions with the server's credential/i),
+    ).toBeInTheDocument();
+  });
+
+  it('explains a generated development token without ever displaying one', async () => {
+    withMcpPosture({
+      authRequired: true,
+      authSource: 'ephemeral-dev',
+      authReason: 'No MCP_AUTH_TOKEN was set, so a random one was generated for this process.',
+    });
+
+    const { container } = renderPage(<Mcp />);
+
+    expect(await screen.findByText(/Bearer token required \(generated\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/printed it to the server's startup log/i)).toBeInTheDocument();
+
+    // The token is never rendered: a token served over HTTP is not a token.
+    expect(container.textContent ?? '').not.toMatch(/[0-9a-f]{64}/);
+  });
+
+  it('renders no secret on the MCP page under any posture', async () => {
+    for (const posture of [
+      { authRequired: true, authSource: 'configured', authReason: 'configured' },
+      { authRequired: true, authSource: 'ephemeral-dev', authReason: 'generated' },
+      { authRequired: false, authSource: 'explicitly-open', authReason: 'open' },
+    ]) {
+      withMcpPosture(posture);
+      const { container, unmount } = renderPage(<Mcp />);
+      await screen.findByText(/MCP URL/i);
+
+      const text = container.textContent ?? '';
+      expect(text).not.toMatch(/1\/\d{10,}:/);
+      expect(text).not.toMatch(/Bearer [A-Za-z0-9]{20,}/);
+      unmount();
+    }
   });
 });

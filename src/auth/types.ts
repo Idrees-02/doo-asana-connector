@@ -120,6 +120,14 @@ export const connectionTestResultSchema = z.object({
     .describe('Credential metadata. Contains no secret values by construction.'),
   checkedAt: z.string(),
   latencyMs: z.number().int(),
+  /*
+   * Correlates this check with the server log line it produced.
+   *
+   * Asana returns no request id of its own, so the connector mints one — the
+   * same scheme every action result carries, which is what lets a failed
+   * connection test be traced in the activity log like any other call.
+   */
+  requestId: z.string(),
   error: z
     .object({
       code: z.string(),

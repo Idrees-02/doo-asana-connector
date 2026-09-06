@@ -8,6 +8,14 @@
  *
  * This module owns no MCP logic. It resolves configuration, then hands every
  * request to the transport unchanged.
+ *
+ * It is also the enforcement point for the transport's security policy. The
+ * previous version logged a warning when a production deployment had no token
+ * and then served the endpoint anyway. It now calls `resolveMcpSecurity`,
+ * which THROWS for any configuration that would expose an unauthenticated
+ * endpoint. The throw propagates through `createApp` and out of
+ * `server/index.ts`, so the process exits before `listen` is ever reached —
+ * there is no code path that starts an insecure production MCP server.
  */
 
 import type { Express, Request, Response } from 'express';
@@ -16,9 +24,33 @@ import rateLimit from 'express-rate-limit';
 import type { Bootstrapped } from '../../src/index.js';
 import { createMcpServer } from '../../mcp/server.js';
 import { createMcpHandler } from '../../mcp/http-transport.js';
+import {
+  describeEphemeralToken,
+  resolveMcpSecurity,
+  type McpSecurityDecision,
+} from '../../src/runtime/mcp-security.js';
 
-export function registerMcpRoute(app: Express, runtime: Bootstrapped): void {
+/**
+ * Mount /mcp, or refuse to start.
+ *
+ * Returns the resolved security decision so the status endpoint can report
+ * the posture without recomputing (and therefore without being the place an
+ * insecure configuration is discovered).
+ */
+export function registerMcpRoute(app: Express, runtime: Bootstrapped): McpSecurityDecision {
   const { connector, config, logger } = runtime;
+
+  /*
+   * FAIL CLOSED. This throws — it does not warn — when the configuration
+   * would expose an unauthenticated endpoint. See src/runtime/mcp-security.ts
+   * for the full policy and the reasoning behind each rule.
+   */
+  const security = resolveMcpSecurity({
+    nodeEnv: config.nodeEnv,
+    authToken: config.mcp.authToken,
+    allowUnauthenticated: config.mcp.allowUnauthenticated,
+    bindHost: config.server.host,
+  });
 
   const hosts = allowedHosts(
     config.server.corsOrigin,
@@ -28,19 +60,14 @@ export function registerMcpRoute(app: Express, runtime: Bootstrapped): void {
 
   const handler = createMcpHandler(() => createMcpServer(connector), {
     allowedHosts: hosts,
-    authToken: config.mcp.authToken,
+    authToken: security.token,
+    allowUnauthenticated: !security.authRequired,
   });
 
-  /*
-   * An unauthenticated public endpoint would let anyone drive a real Asana
-   * workspace with this server's credential. Local development is a different
-   * risk, so the warning names the deployed case specifically.
-   */
-  if (config.mcp.authToken === undefined && config.nodeEnv === 'production') {
-    logger.warn(
-      'MCP endpoint is unauthenticated. Set MCP_AUTH_TOKEN before exposing this deployment.',
-    );
-  }
+  // A token minted for this process is useless if nobody can see it. stderr,
+  // not stdout: stdout is the JSON-RPC channel for the stdio transport.
+  const banner = describeEphemeralToken(security, '/mcp');
+  if (banner !== '') process.stderr.write(banner);
 
   // Liveness first: it must answer even when a probe sends no credential.
   app.get('/mcp/health', (_req: Request, res: Response) => {
@@ -76,9 +103,19 @@ export function registerMcpRoute(app: Express, runtime: Bootstrapped): void {
    */
   logger.info('MCP endpoint mounted', {
     path: '/mcp',
-    authRequired: config.mcp.authToken !== undefined,
+    authRequired: security.authRequired,
+    // The SOURCE of the token, never the token. `describeConfig` has the same
+    // property: there is no field here capable of carrying a secret.
+    authSource: security.source,
+    bindHost: config.server.host,
     allowedHosts: hosts.join(','),
   });
+
+  if (!security.authRequired) {
+    logger.warn('MCP endpoint is UNAUTHENTICATED', { reason: security.reason });
+  }
+
+  return security;
 }
 
 /**

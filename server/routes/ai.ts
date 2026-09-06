@@ -21,7 +21,7 @@ import { z } from 'zod';
 
 import type { Bootstrapped } from '../../src/index.js';
 import { ACTIONS, getAction, type AnyConnectorAction } from '../../src/actions/index.js';
-import { toJsonSchema } from '../../src/schemas/json-schema.js';
+import { toJsonSchemaLenient } from '../../src/schemas/json-schema.js';
 import { chat, GroqError, type ChatMessage, type ChatTool } from '../ai/groq.js';
 
 /** Tool-call rounds before the assistant must answer in prose. */
@@ -277,7 +277,13 @@ export function registerAiRoutes(app: Express, runtime: Bootstrapped): void {
         description: action.safety.write
           ? `${action.description} WRITE — proposed for user approval, not executed directly.`
           : `${action.description} Read-only.`,
-        parameters: prune(toJsonSchema(action.inputSchema)) as Record<string, unknown>,
+        // Lenient: a tool list that fails to build would disable the whole
+        // assistant. Runtime validation still rejects anything the widened
+        // schema would have let through, so the model can be over-permitted
+        // here without the connector being over-permissive.
+        parameters: prune(
+          toJsonSchemaLenient(action.inputSchema, 'input', action.id),
+        ) as Record<string, unknown>,
       },
     }));
   }

@@ -21,11 +21,20 @@ export const ERROR_CODES = {
   /** No such object, or it is invisible to this token (HTTP 404). */
   NOT_FOUND: 'ASANA_NOT_FOUND',
   /**
-   * Optimistic-concurrency failure. Connector-generated: raised by the
-   * stale-write guard in `asana.update_task` when the task changed after the
-   * caller read it. Asana itself does not return 409 for tasks.
+   * Stale-read guard tripped. Connector-generated: raised by
+   * `asana.update_task` when the task changed between the caller reading it
+   * and the update being applied. This is a read-then-write check, NOT an
+   * atomic compare-and-swap — Asana exposes no CAS primitive for tasks, and
+   * docs/WRITE-SAFETY.md says so plainly rather than overstating it.
    */
   CONFLICT: 'ASANA_CONFLICT',
+  /**
+   * The same idempotency key was reused with a different request body.
+   *
+   * Connector-generated. Replaying the first result would answer a question
+   * the caller did not ask, so the ambiguity is surfaced instead of resolved.
+   */
+  IDEMPOTENCY_CONFLICT: 'ASANA_IDEMPOTENCY_CONFLICT',
   /** Blocked for legal reasons, e.g. an embargoed IP (HTTP 451). */
   UNAVAILABLE_LEGAL: 'ASANA_UNAVAILABLE_LEGAL',
   /** Rate limit exceeded (HTTP 429). Carries `retryAfterMs`. */
@@ -140,6 +149,13 @@ export const ERROR_CODE_META: Readonly<Record<ErrorCode, ErrorCodeMeta>> = {
     retryStrategy: 'none',
     severity: 'warning',
     guidance: 'Someone else changed this task after you loaded it. Refresh to see their changes, then reapply yours.',
+  },
+  [ERROR_CODES.IDEMPOTENCY_CONFLICT]: {
+    retryable: false,
+    retryStrategy: 'none',
+    severity: 'error',
+    guidance:
+      'An idempotency key is bound to the first request body it was used with. Use a new key for a different request, or re-send the identical body to replay the original result.',
   },
   [ERROR_CODES.UNAVAILABLE_LEGAL]: {
     retryable: false,

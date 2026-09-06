@@ -30,7 +30,7 @@ import { normalizeThrown, normalizeZodError } from '../errors/normalize.js';
 import { getAction, type AnyConnectorAction } from '../actions/index.js';
 import type { ActionContext } from '../actions/types.js';
 import type { ExecutionMeta } from '../schemas/common.js';
-import { IdempotencyCache } from './idempotency.js';
+import { IdempotencyManager } from './idempotency.js';
 import { generateRequestId } from './request-id.js';
 import type { Logger } from './logger.js';
 import { silentLogger } from './logger.js';
@@ -51,6 +51,15 @@ export interface ConnectorExecutionRequest {
   readonly approved?: boolean | undefined;
   /** Deduplicates deliberate retries of a write. */
   readonly idempotencyKey?: string | undefined;
+  /**
+   * Who is making the call.
+   *
+   * Scopes idempotency records, so two callers cannot collide on a common key
+   * like "retry-1" and neither can replay the other's result. Defaults to a
+   * single shared principal, which is correct for this deployment: the server
+   * holds one Asana credential and acts as one identity.
+   */
+  readonly principal?: string | undefined;
   readonly requestId?: string | undefined;
   readonly signal?: AbortSignal | undefined;
 }
@@ -76,8 +85,17 @@ export interface ExecutorDeps {
   readonly client: AsanaClient;
   readonly logger?: Logger;
   readonly now?: () => number;
-  readonly idempotencyCache?: IdempotencyCache<unknown>;
+  readonly idempotency?: IdempotencyManager;
 }
+
+/**
+ * The principal used when a caller does not name one.
+ *
+ * Not "anonymous": this server authenticates to Asana as exactly one identity,
+ * so a single default principal is an accurate description rather than a
+ * placeholder standing in for real multi-tenancy.
+ */
+export const DEFAULT_PRINCIPAL = 'connector';
 
 /* -------------------------------------------------------------------------- */
 /* Executor                                                                    */
@@ -86,12 +104,12 @@ export interface ExecutorDeps {
 export class ActionExecutor {
   private readonly logger: Logger;
   private readonly now: () => number;
-  private readonly idempotency: IdempotencyCache<unknown>;
+  private readonly idempotency: IdempotencyManager;
 
   constructor(private readonly deps: ExecutorDeps) {
     this.logger = deps.logger ?? silentLogger;
     this.now = deps.now ?? Date.now;
-    this.idempotency = deps.idempotencyCache ?? new IdempotencyCache<unknown>();
+    this.idempotency = deps.idempotency ?? new IdempotencyManager();
   }
 
   async execute(request: ConnectorExecutionRequest): Promise<ConnectorExecutionResult> {
@@ -171,9 +189,17 @@ export class ActionExecutor {
       });
 
       const output = await this.idempotency.run(
-        // Only writes are deduplicated. Replaying a cached read would serve
-        // stale data from a "refresh" the user explicitly asked for.
-        action.safety.write ? scopedKey(action, request.idempotencyKey) : undefined,
+        {
+          // Only writes are deduplicated. Replaying a cached read would serve
+          // stale data from a "refresh" the user explicitly asked for.
+          key: action.safety.write ? request.idempotencyKey : undefined,
+          actionId: action.id,
+          principal: request.principal ?? DEFAULT_PRINCIPAL,
+          // The VALIDATED input, not the raw one: two spellings that parse to
+          // the same thing are the same request, and should replay rather
+          // than conflict.
+          request: input,
+        },
         () => action.run(input, context),
       );
 
@@ -240,14 +266,4 @@ export class ActionExecutor {
       },
     );
   }
-}
-
-/**
- * Namespace idempotency keys per action.
- *
- * Without this, the same key reused across two different actions would replay
- * the wrong result — a create returning a comment, for instance.
- */
-function scopedKey(action: AnyConnectorAction, key: string | undefined): string | undefined {
-  return key === undefined ? undefined : `${action.id}:${key}`;
 }

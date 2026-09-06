@@ -175,6 +175,16 @@ export interface ConnectorStatus {
       readonly transport: string;
       readonly httpPort: number;
       readonly authRequired: boolean;
+      /**
+       * How the endpoint arrived at its posture. Never the token itself.
+       *
+       *   configured       MCP_AUTH_TOKEN was set
+       *   ephemeral-dev    minted for this process, printed to stderr
+       *   explicitly-open  MCP_ALLOW_UNAUTHENTICATED on a loopback dev bind
+       */
+      readonly authSource: 'configured' | 'ephemeral-dev' | 'explicitly-open' | null;
+      /** Plain-language justification, safe to render. */
+      readonly authReason: string | null;
       /** The endpoint's public URL, derived from PUBLIC_BASE_URL. */
       readonly publicUrl: string | null;
     };

@@ -1,21 +1,21 @@
 {
   "data": [
     {
-      "gid": "1217300991109390",
+      "gid": "773000000000001",
       "archived": false,
       "color": "none",
-      "created_at": "2026-08-08T23:33:55.476Z",
-      "modified_at": "2026-08-10T21:01:11.890Z",
-      "name": "Idrees's first project",
+      "created_at": "2026-01-05T09:00:00.000Z",
+      "modified_at": "2026-01-05T09:00:10.000Z",
+      "name": "Synthetic Project Alpha",
       "notes": "",
       "owner": {
-        "gid": "1217300136129834",
-        "name": "Idrees Khaled"
+        "gid": "771000000000001",
+        "name": "Synthetic Builder"
       },
-      "permalink_url": "https://app.asana.com/1/1217300136129846/project/1217300991109390",
+      "permalink_url": "https://app.asana.com/1/772000000000001/project/773000000000001",
       "workspace": {
-        "gid": "1217300136129846",
-        "name": "My workspace"
+        "gid": "772000000000001",
+        "name": "DOO Synthetic Workspace"
       }
     }
   ],
