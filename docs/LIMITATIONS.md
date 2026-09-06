@@ -117,11 +117,46 @@ a real click on the consent screen.
 | Expiry | Reported by Asana, ~1 hour out |
 | Request id | `req_0mtpx28ex3m4mx0ukzq9p` |
 
-**The OAuth path is now verified end to end**: authorization, PKCE, consent,
-code exchange, credential storage and an authenticated Asana API call using
-the resulting token. Refresh, refresh-deduplication and revocation remain
-covered by `tests/unit/oauth.test.ts` against a contract-accurate double —
-they were not triggered live, because the access token had not yet expired.
+### Verified live: encrypted persistence and token refresh
+
+Run: `npm run verify:oauth:lifecycle`, 6 September 2026, against the credential
+the consent flow above produced.
+
+| Check | Result |
+| --- | --- |
+| Credential encrypted at rest | 726-byte envelope · 12-byte IV · 16-byte GCM tag · mode `0600` |
+| No plaintext on disk | `accessToken` / `refreshToken` / `oauth` absent from the file |
+| Decrypted by a NEW process | Succeeded — this is what a restart is |
+| Real Asana call with it | `testConnection` connected · 870 ms · `req_0mtpxqh8ghrff2a7x0f85` |
+| Expiry forced into the past | `needsRefresh` triggered |
+| **Refresh against real Asana** | **Succeeded** · 995 ms · `req_0mtpxqhwr9eap4hi2n19n` |
+| A new access token was issued | `fp_02852ca42823` → `fp_8b7614ae44d1` |
+| Refreshed credential re-encrypted | Persisted |
+
+**The OAuth path is verified end to end**: authorization, PKCE, consent, code
+exchange, encrypted persistence, decryption by a fresh process, an
+authenticated Asana call, and a real token refresh.
+
+#### Revocation is NOT yet confirmed live
+
+The same run attempted revocation and it failed. `revokeToken` returned false
+and the token still worked afterwards.
+
+Investigated: the request shape is correct — Asana's `/-/oauth_revoke`
+answers **200** to the exact body the connector sends (verified directly, and
+to two alternative shapes besides), and `revokeToken` returns true against it.
+The live failure was not reproducible.
+
+What the investigation did find is a real defect, now fixed: `revokeToken`
+swallowed the reason in a bare `catch {}` and returned `false`, so a failure
+carried no status, no error, and no way to tell an unreachable network from a
+rejected request. It now returns `{ revoked, httpStatus, reason }`, the
+disconnect route logs the reason and reports it, and four tests cover the
+failure modes.
+
+**Revocation therefore remains covered by tests against a contract-accurate
+double, and unconfirmed against the live provider.** Stated plainly rather
+than rounded up, since one live attempt failed and the cause is unknown.
 
 #### The granted scopes were `default identity`, not the least-privilege list
 

@@ -41,7 +41,8 @@
     "licenses:check": "tsx scripts/license-report.ts --check",
     "generate:check": "tsx scripts/generate-all.ts --check",
     "verify:oauth": "tsx scripts/verify-oauth.ts",
-    "oauth:connect": "tsx scripts/oauth-connect.ts"
+    "oauth:connect": "tsx scripts/oauth-connect.ts",
+    "verify:oauth:lifecycle": "tsx scripts/verify-oauth-lifecycle.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

@@ -368,7 +368,7 @@ describe('revokeToken and disconnect safety', () => {
       return Promise.resolve(new Response('{}', { status: 200 }));
     }) as typeof globalThis.fetch;
 
-    const ok = await revokeToken(CONFIG, 'token-to-revoke', { fetch: fetchImpl });
+    const { revoked: ok } = await revokeToken(CONFIG, 'token-to-revoke', { fetch: fetchImpl });
 
     expect(ok).toBe(true);
     expect(called?.url).toBe('https://app.asana.com/-/oauth_revoke');
@@ -377,7 +377,7 @@ describe('revokeToken and disconnect safety', () => {
 
   it('reports failure rather than throwing when Asana is unreachable', async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('network down'));
-    const ok = await revokeToken(CONFIG, 'token', { fetch: fetchImpl as unknown as typeof globalThis.fetch });
+    const { revoked: ok } = await revokeToken(CONFIG, 'token', { fetch: fetchImpl as unknown as typeof globalThis.fetch });
 
     // Disconnect must still be able to proceed locally even if this returns false.
     expect(ok).toBe(false);
@@ -458,5 +458,67 @@ describe('the scope parameter', () => {
     // The default list is least-privilege: this connector has no delete
     // action, so it must never ask for the permission to delete.
     expect(config.oauth?.scopes.some((s) => s.includes('delete'))).toBe(false);
+  });
+});
+
+describe('revokeToken reports WHY it failed', () => {
+  /*
+   * A live run failed with a bare `false` and there was nothing to diagnose
+   * from: no status, no error, no way to separate an unreachable network from
+   * a rejected request. Revocation stays best-effort, but the reason is now
+   * carried out rather than swallowed by a `catch {}`.
+   */
+  it('carries the HTTP status when Asana rejects the request', async () => {
+    const fetchImpl = (): Promise<Response> =>
+      Promise.resolve(new Response('{"error":"invalid_client"}', { status: 401, statusText: 'Unauthorized' }));
+
+    const result = await revokeToken(CONFIG, 'token', {
+      fetch: fetchImpl as unknown as typeof globalThis.fetch,
+    });
+
+    expect(result.revoked).toBe(false);
+    expect(result.httpStatus).toBe(401);
+    expect(result.reason).toContain('401');
+  });
+
+  it('reports a transport failure with a null status', async () => {
+    const fetchImpl = (): Promise<Response> => Promise.reject(new Error('getaddrinfo ENOTFOUND'));
+
+    const result = await revokeToken(CONFIG, 'token', {
+      fetch: fetchImpl as unknown as typeof globalThis.fetch,
+    });
+
+    expect(result.revoked).toBe(false);
+    // null distinguishes "never reached Asana" from "Asana said no".
+    expect(result.httpStatus).toBeNull();
+    expect(result.reason).toMatch(/could not reach/i);
+  });
+
+  it('reports success with the status, and no reason', async () => {
+    const fetchImpl = (): Promise<Response> => Promise.resolve(new Response('{}', { status: 200 }));
+
+    const result = await revokeToken(CONFIG, 'token', {
+      fetch: fetchImpl as unknown as typeof globalThis.fetch,
+    });
+
+    expect(result).toEqual({ revoked: true, httpStatus: 200, reason: '' });
+  });
+
+  it('redacts anything credential-shaped out of the failure reason', async () => {
+    const fetchImpl = (): Promise<Response> =>
+      Promise.resolve(
+        // An obviously inert literal; the point of the test is that redaction
+        // removes it before the reason reaches a log line.
+        new Response('failed for Bearer abcdefghijklmnopqrstuvwxyz012345', { status: 400 }), // secrets-scan-ignore
+      );
+
+    const result = await revokeToken(CONFIG, 'token', {
+      fetch: fetchImpl as unknown as typeof globalThis.fetch,
+    });
+
+    // The reason reaches a log line and an API response, so it goes through
+    // the same redaction as everything else.
+    expect(result.reason).not.toContain('abcdefghijklmnopqrstuvwxyz012345');
+    expect(result.reason).toContain('[REDACTED]');
   });
 });

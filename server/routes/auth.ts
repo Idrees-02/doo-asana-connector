@@ -95,9 +95,20 @@ export function registerAuthRoutes(app: Express, runtime: Bootstrapped): void {
     void (async () => {
       const credentials = await runtime.connector.credentialStore.get();
       let revoked = false;
+      let reason = '';
 
       if (credentials?.type === 'oauth' && config.oauth !== undefined) {
-        revoked = await revokeToken(config.oauth, credentials.accessToken);
+        const result = await revokeToken(config.oauth, credentials.accessToken);
+        revoked = result.revoked;
+        reason = result.reason;
+        // Logged rather than discarded: a revocation that quietly fails leaves
+        // a live token in Asana that nobody knows about.
+        if (!revoked) {
+          logger.warn('Upstream token revocation failed', {
+            httpStatus: result.httpStatus,
+            reason: result.reason,
+          });
+        }
       }
 
       // Cleared regardless of whether revocation succeeded: leaving the user
@@ -109,7 +120,9 @@ export function registerAuthRoutes(app: Express, runtime: Bootstrapped): void {
         revokedUpstream: revoked,
         note: revoked
           ? 'Token revoked with Asana and cleared locally.'
-          : 'Cleared locally. The token was not revoked upstream — revoke it manually at app.asana.com/0/my-apps if needed.',
+          : `Cleared locally. The token was NOT revoked upstream${
+              reason === '' ? '' : ` (${reason})`
+            } — revoke it manually at app.asana.com/0/my-apps.`,
       });
     })().catch((error: unknown) => {
       logger.error('Disconnect failed', { error });

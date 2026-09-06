@@ -20,6 +20,7 @@
 
 import { z } from 'zod';
 import type { OAuthConfig } from '../config.js';
+import { redactString } from '../runtime/redact.js';
 import { ERROR_CODES } from '../errors/codes.js';
 import { ConnectorError } from '../errors/ConnectorError.js';
 import { normalizeThrown } from '../errors/normalize.js';
@@ -235,16 +236,44 @@ export async function refreshAccessToken(
   );
 }
 
-/** Best-effort revocation. Used on disconnect. */
+/**
+ * Why a revocation did not succeed.
+ *
+ * Revocation stays best-effort — a failure must never block disconnect, since
+ * the local credential is discarded either way and leaving someone
+ * "connected" in the UI because Asana was unreachable would be worse.
+ *
+ * But "best effort" is not a reason to throw the diagnosis away. An earlier
+ * version returned a bare `false` from a `catch {}`, and when a live run
+ * failed there was nothing to go on: no status, no error, no way to tell an
+ * unreachable network from a rejected request. This carries the reason
+ * without changing the control flow.
+ */
+export interface RevocationResult {
+  readonly revoked: boolean;
+  /** HTTP status Asana returned, or null when the request never completed. */
+  readonly httpStatus: number | null;
+  /** Human-readable reason, redacted. Empty when revocation succeeded. */
+  readonly reason: string;
+}
+
+/**
+ * Best-effort revocation. Used on disconnect.
+ *
+ * Asana's revoke endpoint answers 200 even for a token it does not recognise
+ * (RFC 7009 requires exactly that), so a 200 means "this token is now
+ * invalid", not "this token existed".
+ */
 export async function revokeToken(
   config: OAuthConfig,
   token: string,
   deps: OAuthExchangeDeps = {},
-): Promise<boolean> {
+): Promise<RevocationResult> {
   const fetchImpl = deps.fetch ?? globalThis.fetch.bind(globalThis);
 
+  let response: Response;
   try {
-    const response = await fetchImpl(ASANA_REVOKE_URL, {
+    response = await fetchImpl(ASANA_REVOKE_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -253,13 +282,28 @@ export async function revokeToken(
         token,
       }).toString(),
     });
-    return response.ok;
-  } catch {
-    // A failed revocation must not block disconnect: the local credential is
-    // discarded either way, and leaving the user "connected" in the UI because
-    // Asana was unreachable would be worse.
-    return false;
+  } catch (thrown) {
+    return {
+      revoked: false,
+      httpStatus: null,
+      // The message is redacted: a transport error can echo a URL that
+      // carried credentials in some runtimes.
+      reason: `Could not reach the revoke endpoint: ${redactString(
+        thrown instanceof Error ? thrown.message : String(thrown),
+      )}`,
+    };
   }
+
+  if (response.ok) return { revoked: true, httpStatus: response.status, reason: '' };
+
+  const body = await response.text().catch(() => '');
+  return {
+    revoked: false,
+    httpStatus: response.status,
+    reason: `Asana returned ${response.status} ${response.statusText}${
+      body.length > 0 ? `: ${redactString(body.slice(0, 200))}` : ''
+    }`,
+  };
 }
 
 async function postToken(
