@@ -291,6 +291,7 @@ doo-asana-connector/
 
 | Document | Contents |
 | --- | --- |
+| [`docs/VERIFICATION.md`](docs/VERIFICATION.md) | The live walkthrough — every claim, the command that produced it, and the captured output |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | The threat model, the fail-closed MCP policy, token handling, and every automated gate |
 | [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md) | Getting a PAT or OAuth app, and how credentials are handled |
 | [`docs/WRITE-SAFETY.md`](docs/WRITE-SAFETY.md) | Why writes are never auto-retried, approval, idempotency, concurrency |
