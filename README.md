@@ -120,11 +120,17 @@ pre-shared token.
 
 1. Same page: <https://app.asana.com/0/my-apps> → **Create new app**.
 2. Name the app and accept the terms.
-3. Under **OAuth**, add this exact redirect URL:
+3. Under **OAuth → Redirect URLs**, add this exact redirect URL:
 
    ```
    http://localhost:8787/api/auth/oauth/callback
    ```
+
+   Character for character — `http` not `https`, port `8787`, no trailing
+   slash. Asana only checks this **after** you log in, so getting it wrong
+   shows a normal login page and then fails at the very end with
+   `invalid_request: The redirect_uri parameter does not match a valid url
+   for the application`.
 
 4. Copy the **Client ID** and **Client Secret** into `.env`:
 

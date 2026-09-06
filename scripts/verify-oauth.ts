@@ -11,11 +11,21 @@
  *      response_type, scopes)
  *   2. the PKCE challenge is correct — recomputed independently against
  *      RFC 7636 rather than trusting the code that produced it
- *   3. Asana ACCEPTS the request: it serves its login page rather than
- *      invalid_client, invalid_scope or redirect_uri_mismatch, which is what
- *      proves the client id, the registered redirect URI and the scope list
- *      are all genuinely valid
+ *   3. Asana serves its login step rather than rejecting the request outright
  *   4. `state` is single-use, so a replayed callback fails
+ *
+ * WHAT STEP 3 DOES **NOT** PROVE — learned the hard way.
+ *
+ * An earlier version of this script asserted that a 200 login page meant the
+ * client id, redirect URI and scopes were all valid. It does not. Asana
+ * validates `redirect_uri` only AFTER the user authenticates, so an
+ * unregistered URL still gets you a login page and then fails with
+ * `invalid_request: The redirect_uri parameter does not match a valid url for
+ * the application` at the very end. The script reported PASS and the flow
+ * failed anyway, which is worse than not checking at all.
+ *
+ * So this now reports what it can actually see, and prints the exact
+ * redirect URI to register rather than claiming it already is.
  *
  * What happens after consent — code exchange, refresh, refresh
  * deduplication, revocation — is covered by tests/unit/oauth.test.ts against
@@ -115,27 +125,33 @@ async function main(): Promise<void> {
   const body = response.status === 200 ? (await response.text()).slice(0, 8000) : '';
   const haystack = `${location}\n${body}`;
 
-  const oauthError = /[?&]error=|invalid_client|invalid_scope|redirect_uri_mismatch|unauthorized_client/i.exec(
+  const oauthError = /[?&]error=|invalid_client|invalid_scope|redirect_uri_mismatch|unauthorized_client|invalid_request/i.exec(
     haystack,
   );
 
   check(
-    'Asana did not reject the request',
+    'not rejected before the login step',
     oauthError === null,
-    oauthError === null ? 'no OAuth error returned' : `rejected: ${oauthError[0]}`,
+    oauthError === null ? 'no immediate OAuth error' : `rejected: ${oauthError[0]}`,
   );
   check(
-    'Asana served the consent/login step',
+    'Asana served the login/consent step',
     response.status === 200 || response.status === 302,
     `HTTP ${response.status}`,
   );
 
   console.log(
-    '\n    Asana accepting this request is what proves the client id, the\n' +
-      '    registered redirect URI and every requested scope are genuinely\n' +
-      '    valid. A wrong client id returns invalid_client; an unregistered\n' +
-      '    redirect URI returns redirect_uri_mismatch; a bad scope returns\n' +
-      '    invalid_scope. None of those came back.',
+    '\n  NOT PROVEN BY THE ABOVE — read this before trusting it:\n' +
+      '\n    Asana validates redirect_uri only AFTER the user authenticates.\n' +
+      '    An UNREGISTERED redirect URL still returns a login page here and\n' +
+      '    then fails at the end of the flow with:\n' +
+      '\n      invalid_request: The `redirect_uri` parameter does not match a\n' +
+      '      valid url for the application.\n' +
+      '\n    So a pass above does not mean the redirect URI is registered.\n' +
+      '    Register this EXACT string at https://app.asana.com/0/my-apps\n' +
+      '    under your app -> OAuth -> Redirect URLs:\n' +
+      `\n      ${config.oauth.redirectUri}\n` +
+      '\n    Character for character: scheme, port, and no trailing slash.',
   );
 
   /* 4. Replay protection -------------------------------------------------- */
@@ -171,7 +187,9 @@ async function main(): Promise<void> {
 
   console.log(`\n${passed} passed, ${failed} failed\n`);
   console.log('NOT verified here, and not verifiable without a human:');
-  console.log('  Clicking "Allow" on the consent screen requires a real Asana login.');
+  console.log('  - Whether the redirect URI above is registered (Asana checks it');
+  console.log('    only after login — see the note above).');
+  console.log('  - Clicking "Allow" on the consent screen requires a real Asana login.');
   console.log('  To close that yourself — about 30 seconds:\n');
   console.log('    npm run dev');
   console.log('    open http://localhost:8787/api/auth/oauth/start');

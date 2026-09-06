@@ -112,12 +112,18 @@ staying set rather than on the process refusing to start.
   Asana's token-endpoint contract. **The PAT path is verified end to end;
   OAuth is verified up to, but not including, interactive consent.**
 
-  Everything before the click is now checked against the real provider by
-  `npm run verify:oauth` (15/15 on 2026-09-06): the request shape, the PKCE
-  challenge recomputed independently against RFC 7636, that Asana *accepts*
-  the client id / redirect URI / scope list rather than returning
-  `invalid_client`, `redirect_uri_mismatch` or `invalid_scope`, and that
-  `state` is single-use.
+  Everything before the click that *can* be checked against the real provider
+  is checked by `npm run verify:oauth`: the request shape, the PKCE challenge
+  recomputed independently against RFC 7636, that Asana serves its login step
+  rather than rejecting the request outright, and that `state` is single-use.
+
+  **What that script deliberately does NOT claim**, having previously got it
+  wrong: Asana validates `redirect_uri` only *after* the user authenticates.
+  An unregistered redirect URL still returns a login page, and then fails at
+  the very end of the flow with `invalid_request: The redirect_uri parameter
+  does not match a valid url for the application`. A green run therefore says
+  nothing about whether the redirect URI is registered, and the script now
+  prints the exact string to register instead of implying it already is.
 
   To close the remaining step yourself, `npm run oauth:connect` runs the
   guided flow and then calls `testConnection` with the resulting token —
