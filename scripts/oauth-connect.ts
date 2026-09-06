@@ -83,6 +83,20 @@ async function main(): Promise<void> {
     server.listen(config.server.port, '127.0.0.1', () => resolve());
   });
 
+  /**
+   * Stop listening AND drop live connections.
+   *
+   * `server.close()` alone only stops accepting new connections; it leaves
+   * established ones open. The browser that just completed the redirect holds
+   * a keep-alive socket, so the process would sit there with nothing
+   * listening and never exit — which looks exactly like a hang, right after
+   * the step the user was waiting on.
+   */
+  const shutdown = (): void => {
+    server.close();
+    server.closeAllConnections();
+  };
+
   console.log(
     [
       '',
@@ -109,7 +123,7 @@ async function main(): Promise<void> {
   for (;;) {
     if (Date.now() > deadline) {
       console.error('\n  Timed out after 5 minutes. Nothing was stored.\n');
-      server.close();
+      shutdown();
       process.exit(1);
     }
 
@@ -123,7 +137,7 @@ async function main(): Promise<void> {
 
       if (!connection.connected) {
         console.error(`  FAILED  ${connection.error?.message ?? 'testConnection failed'}\n`);
-        server.close();
+        shutdown();
         process.exit(1);
       }
 
@@ -143,7 +157,7 @@ async function main(): Promise<void> {
           '  code exchange and an authenticated API call, all with a real login.\n',
       );
 
-      server.close();
+      shutdown();
       return;
     }
 
