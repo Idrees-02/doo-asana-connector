@@ -100,38 +100,48 @@ additions. **Redeploy from the current `main` to pick up the fail-closed
 startup policy**, without which "secure" depends on the environment variable
 staying set rather than on the process refusing to start.
 
+### Verified live: the full OAuth 2.0 flow, including consent
+
+Run: `npm run oauth:connect` on 6 September 2026, with a real Asana login and
+a real click on the consent screen.
+
+| Check | Result |
+| --- | --- |
+| Authorization redirect | Accepted by Asana |
+| Consent | Granted by a human at the consent screen |
+| Code exchange | Succeeded — tokens returned |
+| Credential in use | `oauth` (the PAT was disabled so OAuth could not be shadowed) |
+| Authenticated API call | `testConnection` succeeded · 1 workspace · 740 ms |
+| Fingerprint | `fp_31516fbe69b8` (non-reversible; the token is never displayed) |
+| Refresh token | Present — `refreshable: true` |
+| Expiry | Reported by Asana, ~1 hour out |
+| Request id | `req_0mtpx28ex3m4mx0ukzq9p` |
+
+**The OAuth path is now verified end to end**: authorization, PKCE, consent,
+code exchange, credential storage and an authenticated Asana API call using
+the resulting token. Refresh, refresh-deduplication and revocation remain
+covered by `tests/unit/oauth.test.ts` against a contract-accurate double —
+they were not triggered live, because the access token had not yet expired.
+
+#### The granted scopes were `default identity`, not the least-privilege list
+
+Worth stating precisely, because it differs from what the connector requests
+by default.
+
+Asana's **granular** scopes (`tasks:read` and friends) must be enabled per-app
+in the developer console. This app has not opted in, so requesting them was
+rejected with `forbidden_scopes`, and the verified session ran with
+`ASANA_OAUTH_SCOPES` blank — which omits the `scope` parameter and asks for
+the app's default permissions. Asana granted `default identity`, i.e. **full
+permissions for the authorizing user**, not the six-scope least-privilege set.
+
+So: the connector *requests* least privilege and never asks for a delete
+scope, and a test enforces that. But whether least privilege is actually
+*applied* depends on the Asana app being configured for granular scopes. On an
+app that is not, OAuth is as broad as a PAT. Enable the scopes at
+app.asana.com/0/my-apps to close that gap.
+
 ### NOT independently verified
-- **OAuth interactive consent.** The authorization redirect was verified
-  against Asana's real authorization endpoint during development — a live
-  request produced a correctly-formed URL (real `client_id`, matching
-  `redirect_uri`, PKCE `S256` challenge, single-use `state`, exact
-  least-privilege scopes) which Asana accepted, serving its login page rather
-  than an error. Clicking through the consent screen requires a human login and
-  was not performed. Token exchange, refresh, deduplication and revocation are
-  covered by `tests/unit/oauth.test.ts` against a fetch double that mirrors
-  Asana's token-endpoint contract. **The PAT path is verified end to end;
-  OAuth is verified up to, but not including, interactive consent.**
-
-  Everything before the click that *can* be checked against the real provider
-  is checked by `npm run verify:oauth`: the request shape, the PKCE challenge
-  recomputed independently against RFC 7636, that Asana serves its login step
-  rather than rejecting the request outright, and that `state` is single-use.
-
-  **What that script deliberately does NOT claim**, having previously got it
-  wrong: Asana validates `redirect_uri` only *after* the user authenticates.
-  An unregistered redirect URL still returns a login page, and then fails at
-  the very end of the flow with `invalid_request: The redirect_uri parameter
-  does not match a valid url for the application`. A green run therefore says
-  nothing about whether the redirect URI is registered, and the script now
-  prints the exact string to register instead of implying it already is.
-
-  To close the remaining step yourself, `npm run oauth:connect` runs the
-  guided flow and then calls `testConnection` with the resulting token —
-  because a stored token that cannot call Asana is not a connection. Note
-  that a PAT takes precedence over OAuth, so `ASANA_ACCESS_TOKEN` must be
-  unset for the OAuth credential to actually be used; the script refuses to
-  proceed otherwise rather than letting you complete a flow whose result is
-  ignored.
 - **The 30 extended actions were not re-run live in this pass.** They are
   exercised end to end through the same real client, validation and
   error-handling path against the in-memory Asana API.
@@ -141,6 +151,8 @@ Reproduce any of the above:
 ```bash
 npm run smoke:live              # read-only, safe on any workspace
 npm run smoke:live -- --writes  # creates real objects — read the script first
+npm run verify:oauth            # OAuth, everything up to the consent click
+npm run oauth:connect           # OAuth, including the consent click
 npm run verify                  # typecheck, lint, secrets, licences, all tests
 ```
 

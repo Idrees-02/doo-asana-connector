@@ -175,6 +175,12 @@ projects:read  tasks:read  tasks:write  stories:write  users:read  workspaces:re
 > <https://app.asana.com/0/my-apps>, or set `ASANA_OAUTH_SCOPES=` (blank) in
 > `.env` — blank omits the `scope` parameter entirely and asks for the app's
 > default permissions, which is Asana's documented fallback.
+>
+> **The fallback is not least privilege.** Asana grants `default identity`,
+> i.e. full permissions for the authorizing user — as broad as a PAT. The
+> connector requests least privilege and never asks for a delete scope, but
+> that only *applies* if your app has granular scopes enabled. See
+> [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 ### Recommended: a sandbox workspace
 
@@ -408,7 +414,7 @@ Live results below are from **6 September 2026**; see
 | Versioned v1.0.0 | Yes |
 | **Real sandbox/test-account flow** | **Verified 2026-09-06** — required 5 actions live end-to-end (9/9), including idempotency replay creating no duplicate |
 | **MCP endpoint driving live Asana** | **Verified 2026-09-06** — authenticated Streamable HTTP session, 35 tools listed, `asana_list_projects` returned live data, unapproved write refused |
-| **OAuth interactive consent** | **Not clicked through** — requires a human login. Token exchange/refresh/revoke covered by tests against a double matching Asana's contract |
+| **OAuth interactive consent** | **Verified 2026-09-06** — real login, consent granted, code exchanged, `testConnection` succeeded on the OAuth credential (740 ms). Refresh/revoke covered by tests against a contract-accurate double |
 | **HTTPS MCP endpoint deployed** | **Deployed** — `https://doo-asana-connectorfrontend-production-80e4.up.railway.app/mcp`, HTTPS, returns 401 unauthenticated |
 
 See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) for what remains
