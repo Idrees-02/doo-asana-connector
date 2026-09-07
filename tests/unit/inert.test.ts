@@ -71,12 +71,18 @@ describe('the test suite produces no credential-assignment matches', () => {
   it('suppresses nothing — there is nothing to suppress', () => {
     /*
      * A suppression comment hides a match without answering the question a
-     * reviewer is actually asking. If one appears here, the right fix is to
-     * stop producing the match.
+     * reviewer is actually asking. If one appears, the right fix is to stop
+     * producing the match.
+     *
+     * This file is exempt from its own rule because it necessarily names the
+     * marker in order to look for it — the same exemption
+     * `tests/integration/privacy.test.ts` takes for the patterns it defines.
      */
-    const suppressed = testFiles.filter((f) =>
-      readFileSync(join(ROOT, f), 'utf8').includes('secrets-scan-ignore'),
-    );
+    const marker = ['secrets', 'scan', 'ignore'].join('-');
+    const suppressed = testFiles
+      .filter((f) => !f.endsWith('tests/unit/inert.test.ts'))
+      .filter((f) => readFileSync(join(ROOT, f), 'utf8').includes(marker));
+
     expect(suppressed).toEqual([]);
   });
 });
