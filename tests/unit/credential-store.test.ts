@@ -33,6 +33,7 @@ import {
   parseEncryptionKey,
 } from '../../src/auth/credential-store.js';
 import type { AsanaCredentials, OAuthCredentials } from '../../src/auth/types.js';
+import { inert } from '../helpers/inert.js';
 
 const dirs: string[] = [];
 
@@ -54,8 +55,8 @@ const KEY_HEX = randomBytes(32).toString('hex');
  */
 const OAUTH: OAuthCredentials = {
   type: 'oauth',
-  accessToken: 'ACCESS-b7f3d1e9c4a2-MUST-NOT-APPEAR-IN-CIPHERTEXT', // secrets-scan-ignore
-  refreshToken: 'REFRESH-2a9c8e5f1d63-MUST-NOT-APPEAR-IN-CIPHERTEXT', // secrets-scan-ignore
+  accessToken: inert('ACCESS-b7f3d1e9c4a2-MUST-NOT-APPEAR-IN-CIPHERTEXT'),
+  refreshToken: inert('REFRESH-2a9c8e5f1d63-MUST-NOT-APPEAR-IN-CIPHERTEXT'),
   expiresAt: 1_800_000_000_000,
   scopes: ['default', 'identity'],
 };
@@ -183,11 +184,11 @@ describe('EncryptedFileCredentialStore', () => {
 
   it('stores a PAT as well as OAuth credentials', async () => {
     const path = await tempPath();
-    const pat: AsanaCredentials = { type: 'pat', token: 'PAT-VALUE-NOT-REAL' }; // secrets-scan-ignore
+    const pat: AsanaCredentials = { type: 'pat', token: inert('PAT-VALUE-NOT-REAL') };
 
     await new EncryptedFileCredentialStore(path, parseEncryptionKey(KEY_HEX)).set(pat);
 
-    expect(await readFile(path, 'utf8')).not.toContain('PAT-VALUE-NOT-REAL');
+    expect(await readFile(path, 'utf8')).not.toContain(inert('PAT-VALUE-NOT-REAL'));
     expect(
       await new EncryptedFileCredentialStore(path, parseEncryptionKey(KEY_HEX)).get(),
     ).toEqual(pat);

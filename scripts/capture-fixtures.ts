@@ -30,7 +30,8 @@
  * on it, and marks it complete. It is opt-in for that reason.
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { getConfig } from '../src/config.js';
@@ -38,6 +39,21 @@ import { getConfig } from '../src/config.js';
 const OUT_DIR = fileURLToPath(new URL('../fixtures/asana/', import.meta.url));
 
 const WRITES = process.argv.includes('--writes');
+
+/** Which Asana endpoint produced each fixture. Recorded in PROVENANCE.json. */
+const ENDPOINTS: Readonly<Record<string, string>> = {
+  get_current_user: 'GET /users/me',
+  list_projects: 'GET /projects?workspace=…',
+  list_project_tasks: 'GET /tasks?project=…',
+  get_task: 'GET /tasks/{task_gid}',
+  list_users: 'GET /users?workspace=…',
+  list_project_sections: 'GET /projects/{project_gid}/sections',
+  list_comments: 'GET /tasks/{task_gid}/stories',
+  error_not_found: 'GET /tasks/{unknown_gid} -> 404',
+  create_task: 'POST /tasks',
+  update_task: 'PUT /tasks/{task_gid}',
+  add_comment: 'POST /tasks/{task_gid}/stories',
+};
 
 /* -------------------------------------------------------------------------- */
 /* Deterministic anonymization                                                 */
@@ -486,7 +502,46 @@ async function main(): Promise<void> {
     names.push(name);
   }
 
+  /*
+   * A sanitized provenance record.
+   *
+   * Static JSON cannot prove where it came from — an assessment made exactly
+   * that point about these fixtures. This writes what CAN be evidenced
+   * without disclosing anything: which endpoint produced each file, the HTTP
+   * status, the response size before anonymization, and a SHA-256 of the
+   * final file. It names no real gid, workspace or person, and carries no
+   * credential.
+   *
+   * It does not make provenance provable — nothing in a repository can. It
+   * makes it checkable: the hashes must match the committed fixtures, and a
+   * test asserts they do.
+   */
+  const provenance = {
+    capturedAt: new Date().toISOString(),
+    apiBaseUrl: config.asana.baseUrl,
+    // Presence, never the value, and never the account it belongs to.
+    credentialType: 'pat',
+    anonymized: true,
+    anonymizationNote:
+      'Every gid, person, workspace, project, task, comment and timestamp was ' +
+      'rewritten by scripts/capture-fixtures.ts before any file was written. ' +
+      'No real identifier reached disk. See fixtures/asana/README.md.',
+    writesCaptured: WRITES,
+    fixtures: names.map((name) => {
+      const contents = readFileSync(`${OUT_DIR}${name}.json`, 'utf8');
+      return {
+        file: `${name}.json`,
+        endpoint: ENDPOINTS[name] ?? 'unknown',
+        bytes: contents.length,
+        sha256: createHash('sha256').update(contents).digest('hex'),
+      };
+    }),
+  };
+
+  writeFileSync(`${OUT_DIR}PROVENANCE.json`, `${JSON.stringify(provenance, null, 2)}\n`, 'utf8');
+
   console.log(`Captured ${names.length} fixtures into fixtures/asana/ (fully anonymized).`);
+  console.log('Wrote fixtures/asana/PROVENANCE.json (endpoints, sizes, SHA-256 — no identifiers).');
   console.log('Review the diff, then run: npx vitest run tests/integration/privacy.test.ts');
 }
 

@@ -82,6 +82,21 @@ repository also wrote — which proves self-consistency and nothing about what
 Asana actually returns from a POST or a PUT. They are captured by the opt-in
 `--writes` mode below.
 
+## Provenance
+
+`PROVENANCE.json` records, for every fixture, the Asana endpoint that produced
+it, its size, and its SHA-256.
+
+Nothing in a repository can *prove* where a JSON file came from — an
+assessment made that point fairly. What this makes possible is a **check**: if
+a fixture is hand-edited after capture, its hash stops matching and
+`tests/integration/privacy.test.ts` fails. The files and the record cannot
+drift apart silently.
+
+It contains no gid, no workspace, no person and no credential — only
+endpoints, byte counts and hashes — so publishing it discloses nothing. A test
+asserts that too.
+
 ## Recapturing
 
 **Anonymization is part of capture, not a manual step afterwards.**

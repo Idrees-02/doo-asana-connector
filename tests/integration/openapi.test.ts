@@ -29,11 +29,13 @@ import { ALL_ERROR_CODES } from '../../src/errors/codes.js';
 
 interface OpenApiDoc {
   openapi: string;
+  jsonSchemaDialect: string;
   info: { title: string; version: string; license?: { name: string } };
   servers: unknown[];
   paths: Record<string, Record<string, Record<string, unknown>>>;
   components: {
     schemas: Record<string, Record<string, unknown>>;
+    responses: Record<string, Record<string, unknown>>;
     securitySchemes: Record<string, unknown>;
   };
 }
@@ -49,6 +51,13 @@ const doc = parse(raw) as OpenApiDoc;
 describe('openapi.yaml is a valid OpenAPI 3.1 document', () => {
   it('declares OpenAPI 3.1.x', () => {
     expect(doc.openapi).toMatch(/^3\.1\.\d+$/);
+  });
+
+  it('declares the JSON Schema dialect ONCE, at the document root', () => {
+    // OpenAPI 3.1 added `jsonSchemaDialect` for exactly this. Repeating
+    // `$schema` inside every embedded schema previously put 70 copies of one
+    // URL into the document.
+    expect(doc.jsonSchemaDialect).toBe('https://json-schema.org/draft/2020-12/schema');
   });
 
   it('passes a real OpenAPI validator', async () => {
@@ -168,8 +177,9 @@ describe('input and output schemas are published for every action', () => {
   it.each(ACTIONS.map((a) => a.id))('%s publishes both directions', (id) => {
     const properties = requestSchema(id)['properties'] as Record<string, Record<string, unknown>>;
     expect(properties['input']).toBeDefined();
-    // Draft 2020-12, the same dialect the runtime schemas declare.
-    expect(properties['input']?.['$schema']).toBe('https://json-schema.org/draft/2020-12/schema');
+    // The dialect is declared once at the root, so embedded schemas must NOT
+    // repeat it — that duplication is what made the document unreadable.
+    expect(properties['input']?.['$schema']).toBeUndefined();
 
     const ok = (operation(id)['responses'] as Record<string, Record<string, unknown>>)['200'];
     const content = ok?.['content'] as Record<string, { schema: Record<string, unknown> }>;
@@ -263,5 +273,47 @@ describe('the committed document is generated, not hand-edited', () => {
   it('contains no credential-shaped value', () => {
     expect(raw).not.toMatch(/1\/\d{10,}:[0-9a-f]{16,}/);
     expect(raw).not.toMatch(/Bearer\s+\S{16,}/);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Readability                                                                 */
+/* -------------------------------------------------------------------------- */
+
+describe('the document is small enough to actually be read', () => {
+  /*
+   * A reviewer reported, twice, that they could not read openapi.yaml. It was
+   * 355 KB across 9,136 lines — 18% of the whole repository, and almost
+   * entirely duplication: the six-line object-reference schema appeared 71
+   * times, and the same eight error responses were inlined into all 35
+   * endpoints.
+   *
+   * A published contract nobody can open is not serving its purpose, so size
+   * is a property worth defending with a test rather than something that
+   * quietly regrows.
+   */
+  it('stays under 200 KB', () => {
+    expect(raw.length).toBeLessThan(200_000);
+  });
+
+  it('references shared domain types instead of re-inlining them', () => {
+    for (const name of ['Task', 'Project', 'Comment', 'AsanaObjectRef', 'Pagination']) {
+      expect(doc.components.schemas[name]).toBeDefined();
+    }
+    // The Task schema is defined once and referenced, not copied per endpoint.
+    const taskRefs = raw.split('#/components/schemas/Task').length - 1;
+    expect(taskRefs).toBeGreaterThan(5);
+  });
+
+  it('references shared error responses instead of re-inlining them', () => {
+    const responses = doc.components.responses;
+    for (const name of ['ValidationError', 'AuthenticationError', 'NotFound', 'RateLimited']) {
+      expect(responses[name]).toBeDefined();
+    }
+  });
+
+  it('repeats the dialect URL at most once', () => {
+    // Once in jsonSchemaDialect, and nowhere else.
+    expect(raw.split('https://json-schema.org/draft/2020-12/schema').length - 1).toBe(1);
   });
 });

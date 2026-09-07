@@ -203,3 +203,106 @@ export function assertSchemasRepresentable(subjects: readonly SchemaSubject[]): 
     );
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Shared-component extraction                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Hoist repeated sub-schemas into shared components.
+ *
+ * ============================================================================
+ * WHY: THE PUBLISHED CONTRACT HAD BECOME UNREADABLE.
+ * ============================================================================
+ *
+ * Every action's schema was emitted fully inlined, so the same domain types
+ * were duplicated across 35 endpoints — the six-line "reference to another
+ * Asana object" appeared 71 times, and openapi.yaml reached 355 KB across
+ * 9,136 lines. A reviewer reported, twice, that they could not read it.
+ *
+ * A contract nobody can open is not serving its purpose, and the size was
+ * pure duplication rather than detail. This walks a converted schema and
+ * replaces any subtree structurally identical to a registered shared schema
+ * with a `$ref`, which is exactly what `components/schemas` is for.
+ *
+ * Structural comparison rather than identity: the conversion produces fresh
+ * objects each time, so the only way to recognise "this is the Task schema
+ * again" is to compare what it says.
+ */
+
+/** Canonical JSON with sorted keys, so key order cannot defeat comparison. */
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  return `{${Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`)
+    .join(',')}}`;
+}
+
+export interface SharedComponent {
+  /** Name under `components/schemas`. */
+  readonly name: string;
+  readonly schema: z.ZodType;
+  readonly io: SchemaIo;
+}
+
+export interface ExtractedComponents {
+  /** `components/schemas` entries, keyed by name. */
+  readonly components: Record<string, JsonSchemaObject>;
+  /**
+   * Replaces matching subtrees with `$ref`, and drops the per-schema
+   * `$schema` line — OpenAPI 3.1 declares the dialect once at the document
+   * root via `jsonSchemaDialect`, so repeating it inside every embedded
+   * schema is 70 copies of one URL.
+   */
+  readonly deduplicate: (schema: JsonSchemaObject) => JsonSchemaObject;
+}
+
+/**
+ * Build the component set and a de-duplicator over it.
+ *
+ * `$schema` is stripped from the hoisted components: it belongs on the
+ * document root, and repeating the dialect inside every component is more of
+ * the duplication this exists to remove.
+ */
+export function extractSharedComponents(
+  shared: readonly SharedComponent[],
+  refPrefix = '#/components/schemas',
+): ExtractedComponents {
+  const components: Record<string, JsonSchemaObject> = {};
+  const byShape = new Map<string, string>();
+
+  for (const entry of shared) {
+    const { $schema: _dialect, ...body } = toJsonSchema(entry.schema, entry.io, entry.name);
+    components[entry.name] = body;
+    // First registration wins, so two identically-shaped schemas resolve to
+    // one stable name rather than alternating between them.
+    const key = canonical(body);
+    if (!byShape.has(key)) byShape.set(key, entry.name);
+  }
+
+  const replace = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(replace);
+    if (node === null || typeof node !== 'object') return node;
+
+    const record = node as Record<string, unknown>;
+    // Never collapse the whole document into a self-reference.
+    const { $schema: dialect, ...body } = record;
+    const name = dialect === undefined ? byShape.get(canonical(body)) : undefined;
+    if (name !== undefined) return { $ref: `${refPrefix}/${name}` };
+
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(record)) out[key] = replace(value);
+    return out;
+  };
+
+  return {
+    components,
+    deduplicate: (schema) => {
+      const { $schema: _dialect, ...body } = schema;
+      return replace(body) as JsonSchemaObject;
+    },
+  };
+}

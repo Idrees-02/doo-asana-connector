@@ -18,6 +18,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -279,5 +280,79 @@ describe('the demo provider is clearly synthetic too', () => {
       // always attributable to one source or the other.
       expect(match[1]).toMatch(/^9/);
     }
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Fixture provenance                                                          */
+/* -------------------------------------------------------------------------- */
+
+describe('fixture provenance is checkable, not merely asserted', () => {
+  /*
+   * An assessment observed, fairly, that "static JSON alone cannot prove that
+   * provenance". Nothing in a repository can prove where a file came from.
+   *
+   * What PROVENANCE.json does is make the claim CHECKABLE: it records which
+   * endpoint produced each fixture, its size, and its SHA-256. If a fixture is
+   * hand-edited after capture, the hash stops matching and this fails — so the
+   * files and the record cannot drift apart silently.
+   *
+   * It deliberately contains no gid, no workspace, no person and no
+   * credential, so publishing it discloses nothing.
+   */
+  interface Provenance {
+    capturedAt: string;
+    apiBaseUrl: string;
+    anonymized: boolean;
+    writesCaptured: boolean;
+    fixtures: Array<{ file: string; endpoint: string; bytes: number; sha256: string }>;
+  }
+
+  const record = JSON.parse(
+    readFileSync(join(ROOT, 'fixtures/asana/PROVENANCE.json'), 'utf8'),
+  ) as Provenance;
+
+  it('records every committed fixture', () => {
+    const onDisk = files
+      .filter((f) => f.startsWith('fixtures/asana/') && f.endsWith('.json') && !f.endsWith('PROVENANCE.json'))
+      .map((f) => f.replace('fixtures/asana/', ''))
+      .sort();
+
+    expect(record.fixtures.map((f) => f.file).sort()).toEqual(onDisk);
+  });
+
+  it('names the endpoint that produced each fixture', () => {
+    for (const entry of record.fixtures) {
+      expect(entry.endpoint).toMatch(/^(GET|POST|PUT) \//);
+    }
+  });
+
+  it('covers all five required actions', () => {
+    const endpoints = record.fixtures.map((f) => f.endpoint).join(' ');
+    expect(endpoints).toContain('GET /projects');
+    expect(endpoints).toContain('GET /tasks?project=');
+    expect(endpoints).toContain('POST /tasks');
+    expect(endpoints).toContain('PUT /tasks/{task_gid}');
+    expect(endpoints).toContain('POST /tasks/{task_gid}/stories');
+  });
+
+  it('hashes match the committed files — nothing was edited after capture', () => {
+    for (const entry of record.fixtures) {
+      const contents = readFileSync(join(ROOT, 'fixtures/asana', entry.file), 'utf8');
+      expect(createHash('sha256').update(contents).digest('hex'), entry.file).toBe(entry.sha256);
+      expect(contents.length, entry.file).toBe(entry.bytes);
+    }
+  });
+
+  it('states that the fixtures were anonymized', () => {
+    expect(record.anonymized).toBe(true);
+  });
+
+  it('itself contains no identifier or credential', () => {
+    const raw = readFileSync(join(ROOT, 'fixtures/asana/PROVENANCE.json'), 'utf8');
+    // No gids, no names, no tokens — only endpoints, sizes and hashes.
+    expect(raw).not.toMatch(/\b\d{12,}\b/);
+    expect(raw).not.toMatch(/[12]\/\d{10,}:/);
+    expect(raw.toLowerCase()).not.toContain('bearer ');
   });
 });

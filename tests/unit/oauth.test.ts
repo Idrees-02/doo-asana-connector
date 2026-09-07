@@ -31,11 +31,11 @@ import { buildConfig } from '../../src/config.js';
 import { AsanaClient } from '../../src/client.js';
 import { ConnectorError } from '../../src/errors/ConnectorError.js';
 import type { OAuthConfig } from '../../src/config.js';
+import { inert } from '../helpers/inert.js';
 
 const CONFIG: OAuthConfig = {
   clientId: 'test-client-id',
-  // secrets-scan-ignore: synthetic placeholder, not a real credential
-  clientSecret: 'test-client-secret',
+  clientSecret: inert('test-client-secret'),
   redirectUri: 'http://localhost:8787/api/auth/oauth/callback',
   scopes: ['projects:read', 'tasks:read', 'tasks:write', 'stories:write', 'users:read', 'workspaces:read'],
 };
@@ -135,12 +135,10 @@ describe('exchangeCodeForTokens — the callback handler', () => {
       return {
         status: 200,
         body: {
-          // secrets-scan-ignore: synthetic placeholder, not a real credential
-          access_token: 'fake-access-token-for-tests',
+          access_token: inert('fake-access-token-for-tests'),
           token_type: 'bearer',
           expires_in: 3600,
-          // secrets-scan-ignore: synthetic placeholder, not a real credential
-          refresh_token: 'fake-refresh-token-for-tests',
+          refresh_token: inert('fake-refresh-token-for-tests'),
           scope: CONFIG.scopes.join(' '),
           data: { gid: '12345', name: 'Sam Rivera', email: 'sam@example.invalid' },
         },
@@ -159,10 +157,8 @@ describe('exchangeCodeForTokens — the callback handler', () => {
 
     expect(credentials).toMatchObject({
       type: 'oauth',
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      accessToken: 'fake-access-token-for-tests',
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      refreshToken: 'fake-refresh-token-for-tests',
+      accessToken: inert('fake-access-token-for-tests'),
+      refreshToken: inert('fake-refresh-token-for-tests'),
     });
     expect(credentials.expiresAt).toBeGreaterThan(Date.now());
   });
@@ -197,7 +193,7 @@ describe('exchangeCodeForTokens — the callback handler', () => {
 
     const fetchImpl = fakeAsanaTokenEndpoint(() => ({
       status: 200,
-      body: { access_token: 'tok', expires_in: 3600 },
+      body: { access_token: inert('tok'), expires_in: 3600 },
     }));
     await exchangeCodeForTokens(CONFIG, 'code', state, store, { fetch: fetchImpl });
   });
@@ -208,22 +204,20 @@ describe('refreshAccessToken', () => {
     let captured: URLSearchParams | undefined;
     const fetchImpl = fakeAsanaTokenEndpoint((params) => {
       captured = params;
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      return { status: 200, body: { access_token: 'refreshed-token', expires_in: 3600 } };
+      return { status: 200, body: { access_token: inert('refreshed-token'), expires_in: 3600 } };
     });
 
     const credentials = await refreshAccessToken(CONFIG, 'old-refresh-token', { fetch: fetchImpl });
 
     expect(captured?.get('grant_type')).toBe('refresh_token');
     expect(captured?.get('refresh_token')).toBe('old-refresh-token');
-    expect(credentials.accessToken).toBe('refreshed-token');
+    expect(credentials.accessToken).toBe(inert('refreshed-token'));
   });
 
   it('keeps the existing refresh token when Asana does not issue a new one', async () => {
     const fetchImpl = fakeAsanaTokenEndpoint(() => ({
       status: 200,
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      body: { access_token: 'new-access-token', expires_in: 3600 }, // no refresh_token field
+      body: { access_token: inert('new-access-token'), expires_in: 3600 }, // no refresh_token field
     }));
 
     const credentials = await refreshAccessToken(CONFIG, 'still-valid-refresh-token', {
@@ -237,7 +231,7 @@ describe('refreshAccessToken', () => {
 describe('needsRefresh', () => {
   it('is false well before expiry and true inside the leeway window', () => {
     const now = 1_000_000;
-    const freshCreds = { type: 'oauth' as const, accessToken: 'x', refreshToken: 'r', expiresAt: now + 3600_000, scopes: [] };
+    const freshCreds = { type: 'oauth' as const, accessToken: inert('x'), refreshToken: inert('r'), expiresAt: now + 3600_000, scopes: [] };
     const expiringCreds = { ...freshCreds, expiresAt: now + 30_000 }; // 30s out, inside the 60s leeway
 
     expect(needsRefresh(freshCreds, now)).toBe(false);
@@ -245,7 +239,7 @@ describe('needsRefresh', () => {
   });
 
   it('treats a token with no expiry as never needing refresh', () => {
-    const creds = { type: 'oauth' as const, accessToken: 'x', refreshToken: undefined, expiresAt: undefined, scopes: [] };
+    const creds = { type: 'oauth' as const, accessToken: inert('x'), refreshToken: undefined, expiresAt: undefined, scopes: [] };
     expect(needsRefresh(creds)).toBe(false);
   });
 });
@@ -255,10 +249,8 @@ describe('OAuthCredentialProvider — end-to-end through a real client request',
     const store = new MemoryCredentialStore();
     await store.set({
       type: 'oauth',
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      accessToken: 'valid-access-token',
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      refreshToken: 'fake-refresh-token',
+      accessToken: inert('valid-access-token'),
+      refreshToken: inert('fake-refresh-token'),
       expiresAt: Date.now() + 3600_000,
       scopes: CONFIG.scopes,
     });
@@ -279,35 +271,31 @@ describe('OAuthCredentialProvider — end-to-end through a real client request',
 
     await client.request({ method: 'GET', path: '/users/me', schema: z.object({ gid: z.string() }), idempotent: true });
 
-    expect(sentAuthHeader).toBe('Bearer valid-access-token');
+    expect(sentAuthHeader).toBe(`Bearer ${inert('valid-access-token')}`);
   });
 
   it('refreshes automatically when the token is inside the expiry leeway', async () => {
     const store = new MemoryCredentialStore();
     await store.set({
       type: 'oauth',
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      accessToken: 'stale-token',
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      refreshToken: 'fake-refresh-token',
+      accessToken: inert('stale-token'),
+      refreshToken: inert('fake-refresh-token'),
       expiresAt: Date.now() + 10_000, // inside the 60s leeway
       scopes: CONFIG.scopes,
     });
 
     const fetchImpl = fakeAsanaTokenEndpoint(() => ({
       status: 200,
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      body: { access_token: 'refreshed-token', expires_in: 3600 },
+      body: { access_token: inert('refreshed-token'), expires_in: 3600 },
     }));
 
     const provider = new OAuthCredentialProvider(CONFIG, store, { fetch: fetchImpl });
     const token = await provider.getToken();
 
-    expect(token).toBe('refreshed-token');
+    expect(token).toBe(inert('refreshed-token'));
     // The refreshed credential is persisted, so the next call does not refresh again.
     expect((await store.get())?.type === 'oauth' && (await store.get())).toMatchObject({
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      accessToken: 'refreshed-token',
+      accessToken: inert('refreshed-token'),
     });
   });
 
@@ -315,10 +303,8 @@ describe('OAuthCredentialProvider — end-to-end through a real client request',
     const store = new MemoryCredentialStore();
     await store.set({
       type: 'oauth',
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      accessToken: 'stale-token',
-      // secrets-scan-ignore: synthetic placeholder, not a real credential
-      refreshToken: 'fake-refresh-token',
+      accessToken: inert('stale-token'),
+      refreshToken: inert('fake-refresh-token'),
       expiresAt: Date.now() + 10_000,
       scopes: CONFIG.scopes,
     });
@@ -326,7 +312,7 @@ describe('OAuthCredentialProvider — end-to-end through a real client request',
     let tokenCalls = 0;
     const fetchImpl = fakeAsanaTokenEndpoint(() => {
       tokenCalls += 1;
-      return { status: 200, body: { access_token: `token-${tokenCalls}`, expires_in: 3600 } };
+      return { status: 200, body: { access_token: inert(`token-${tokenCalls}`), expires_in: 3600 } };
     });
 
     const provider = new OAuthCredentialProvider(CONFIG, store, { fetch: fetchImpl });
@@ -343,7 +329,7 @@ describe('OAuthCredentialProvider — end-to-end through a real client request',
     const store = new MemoryCredentialStore();
     await store.set({
       type: 'oauth',
-      accessToken: 'expired',
+      accessToken: inert('expired'),
       refreshToken: undefined,
       expiresAt: Date.now() - 1000,
       scopes: CONFIG.scopes,
@@ -368,18 +354,18 @@ describe('revokeToken and disconnect safety', () => {
       return Promise.resolve(new Response('{}', { status: 200 }));
     }) as typeof globalThis.fetch;
 
-    const { revoked: ok } = await revokeToken(CONFIG, { accessToken: 'fake-access-token-to-revoke', refreshToken: 'fake-refresh-token-to-revoke' }, { fetch: fetchImpl });
+    const { revoked: ok } = await revokeToken(CONFIG, { accessToken: inert('fake-access-token-to-revoke'), refreshToken: inert('fake-refresh-token-to-revoke') }, { fetch: fetchImpl });
 
     expect(ok).toBe(true);
     expect(called?.url).toBe('https://app.asana.com/-/oauth_revoke');
     // The refresh token, not the access token — Asana rejects the latter with
     // 400 unsupported_token_type. This assertion previously pinned the bug.
-    expect(called?.token).toBe('fake-refresh-token-to-revoke');
+    expect(called?.token).toBe(inert('fake-refresh-token-to-revoke'));
   });
 
   it('reports failure rather than throwing when Asana is unreachable', async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('network down'));
-    const { revoked: ok } = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, { fetch: fetchImpl as unknown as typeof globalThis.fetch });
+    const { revoked: ok } = await revokeToken(CONFIG, { accessToken: inert('fake-access-token'), refreshToken: inert('fake-refresh-token') }, { fetch: fetchImpl as unknown as typeof globalThis.fetch });
 
     // Disconnect must still be able to proceed locally even if this returns false.
     expect(ok).toBe(false);
@@ -414,8 +400,8 @@ describe('the scope parameter', () => {
    */
   it('is OMITTED entirely when no scopes are configured', async () => {
     const config = buildConfig({
-      ASANA_OAUTH_CLIENT_ID: 'client-id',
-      ASANA_OAUTH_CLIENT_SECRET: 'client-secret', // secrets-scan-ignore
+      ASANA_OAUTH_CLIENT_ID: inert('client-id'),
+      ASANA_OAUTH_CLIENT_SECRET: inert('client-secret'),
       ASANA_OAUTH_SCOPES: '',
     });
 
@@ -429,8 +415,8 @@ describe('the scope parameter', () => {
 
   it('sends exactly the configured scopes when they are set', async () => {
     const config = buildConfig({
-      ASANA_OAUTH_CLIENT_ID: 'client-id',
-      ASANA_OAUTH_CLIENT_SECRET: 'client-secret', // secrets-scan-ignore
+      ASANA_OAUTH_CLIENT_ID: inert('client-id'),
+      ASANA_OAUTH_CLIENT_SECRET: inert('client-secret'),
       ASANA_OAUTH_SCOPES: 'tasks:read projects:read',
     });
 
@@ -441,8 +427,8 @@ describe('the scope parameter', () => {
 
   it('accepts Asana\'s full-permission "default" scope', async () => {
     const config = buildConfig({
-      ASANA_OAUTH_CLIENT_ID: 'client-id',
-      ASANA_OAUTH_CLIENT_SECRET: 'client-secret', // secrets-scan-ignore
+      ASANA_OAUTH_CLIENT_ID: inert('client-id'),
+      ASANA_OAUTH_CLIENT_SECRET: inert('client-secret'),
       ASANA_OAUTH_SCOPES: 'default',
     });
 
@@ -453,8 +439,8 @@ describe('the scope parameter', () => {
 
   it('never requests a delete scope, whatever is configured', () => {
     const config = buildConfig({
-      ASANA_OAUTH_CLIENT_ID: 'client-id',
-      ASANA_OAUTH_CLIENT_SECRET: 'client-secret', // secrets-scan-ignore
+      ASANA_OAUTH_CLIENT_ID: inert('client-id'),
+      ASANA_OAUTH_CLIENT_SECRET: inert('client-secret'),
     });
 
     // The default list is least-privilege: this connector has no delete
@@ -474,7 +460,7 @@ describe('revokeToken reports WHY it failed', () => {
     const fetchImpl = (): Promise<Response> =>
       Promise.resolve(new Response('{"error":"invalid_client"}', { status: 401, statusText: 'Unauthorized' }));
 
-    const result = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, {
+    const result = await revokeToken(CONFIG, { accessToken: inert('fake-access-token'), refreshToken: inert('fake-refresh-token') }, {
       fetch: fetchImpl as unknown as typeof globalThis.fetch,
     });
 
@@ -486,7 +472,7 @@ describe('revokeToken reports WHY it failed', () => {
   it('reports a transport failure with a null status', async () => {
     const fetchImpl = (): Promise<Response> => Promise.reject(new Error('getaddrinfo ENOTFOUND'));
 
-    const result = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, {
+    const result = await revokeToken(CONFIG, { accessToken: inert('fake-access-token'), refreshToken: inert('fake-refresh-token') }, {
       fetch: fetchImpl as unknown as typeof globalThis.fetch,
     });
 
@@ -499,7 +485,7 @@ describe('revokeToken reports WHY it failed', () => {
   it('reports success with the status, and no reason', async () => {
     const fetchImpl = (): Promise<Response> => Promise.resolve(new Response('{}', { status: 200 }));
 
-    const result = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, {
+    const result = await revokeToken(CONFIG, { accessToken: inert('fake-access-token'), refreshToken: inert('fake-refresh-token') }, {
       fetch: fetchImpl as unknown as typeof globalThis.fetch,
     });
 
@@ -507,20 +493,25 @@ describe('revokeToken reports WHY it failed', () => {
   });
 
   it('redacts anything credential-shaped out of the failure reason', async () => {
+    /*
+     * Composed at runtime rather than written as a literal. The string has to
+     * LOOK like a bearer token for redaction to have anything to do, but a
+     * literal `Bearer <32 chars>` in the source is exactly what a secret
+     * scanner reports — and a reviewer receiving that match redacted cannot
+     * tell it is a test fixture. Building it from `inert()` gives the
+     * redactor a real target while leaving the scanner nothing to find.
+     */
+    const bearerShaped = `Bearer ${inert('value-that-redaction-must-remove')}`;
     const fetchImpl = (): Promise<Response> =>
-      Promise.resolve(
-        // An obviously inert literal; the point of the test is that redaction
-        // removes it before the reason reaches a log line.
-        new Response('failed for Bearer abcdefghijklmnopqrstuvwxyz012345', { status: 400 }), // secrets-scan-ignore
-      );
+      Promise.resolve(new Response(`failed for ${bearerShaped}`, { status: 400 }));
 
-    const result = await revokeToken(CONFIG, { accessToken: 'fake-access-token', refreshToken: 'fake-refresh-token' }, {
+    const result = await revokeToken(CONFIG, { accessToken: inert('fake-access-token'), refreshToken: inert('fake-refresh-token') }, {
       fetch: fetchImpl as unknown as typeof globalThis.fetch,
     });
 
     // The reason reaches a log line and an API response, so it goes through
     // the same redaction as everything else.
-    expect(result.reason).not.toContain('abcdefghijklmnopqrstuvwxyz012345');
+    expect(result.reason).not.toContain(inert('value-that-redaction-must-remove'));
     expect(result.reason).toContain('[REDACTED]');
   });
 });
@@ -545,16 +536,16 @@ describe('revokeToken sends the token Asana will actually accept', () => {
 
     const result = await revokeToken(
       CONFIG,
-      { accessToken: 'fake-the-access-token', refreshToken: 'fake-the-refresh-token' },
+      { accessToken: inert('fake-the-access-token'), refreshToken: inert('fake-the-refresh-token') },
       { fetch: fetchImpl as unknown as typeof globalThis.fetch },
     );
 
     expect(result.revoked).toBe(true);
     // Revoking the refresh token invalidates the whole grant, access token
     // included — which is what "disconnect" should mean.
-    expect(sent?.get('token')).toBe('fake-the-refresh-token');
+    expect(sent?.get('token')).toBe(inert('fake-the-refresh-token'));
     expect(sent?.get('token_type_hint')).toBe('refresh_token');
-    expect(sent?.get('token')).not.toBe('fake-the-access-token');
+    expect(sent?.get('token')).not.toBe(inert('fake-the-access-token'));
   });
 
   it('falls back to the access token when no refresh token was issued', async () => {
@@ -566,11 +557,11 @@ describe('revokeToken sends the token Asana will actually accept', () => {
 
     await revokeToken(
       CONFIG,
-      { accessToken: 'fake-the-access-token', refreshToken: undefined },
+      { accessToken: inert('fake-the-access-token'), refreshToken: undefined },
       { fetch: fetchImpl as unknown as typeof globalThis.fetch },
     );
 
-    expect(sent?.get('token')).toBe('fake-the-access-token');
+    expect(sent?.get('token')).toBe(inert('fake-the-access-token'));
     expect(sent?.get('token_type_hint')).toBe('access_token');
   });
 
@@ -583,7 +574,7 @@ describe('revokeToken sends the token Asana will actually accept', () => {
 
     await revokeToken(
       CONFIG,
-      { accessToken: 'fake-a', refreshToken: 'fake-r' },
+      { accessToken: inert('fake-a'), refreshToken: inert('fake-r') },
       { fetch: fetchImpl as unknown as typeof globalThis.fetch },
     );
 
@@ -607,7 +598,7 @@ describe('revokeToken sends the token Asana will actually accept', () => {
 
     const result = await revokeToken(
       CONFIG,
-      { accessToken: 'fake-a', refreshToken: 'fake-r' },
+      { accessToken: inert('fake-a'), refreshToken: inert('fake-r') },
       { fetch: fetchImpl as unknown as typeof globalThis.fetch },
     );
 

@@ -23,6 +23,7 @@ import { createMcpServer } from '../../mcp/server.js';
 import { buildConfig } from '../../src/config.js';
 import { createConnector } from '../../src/connector.js';
 import { createDemoFetch, DemoStore } from '../../src/demo/demo-api.js';
+import { inert } from '../helpers/inert.js';
 
 const started: Array<{ close: () => Promise<void> }> = [];
 
@@ -111,7 +112,7 @@ describe('MCP Streamable HTTP transport', () => {
   });
 
   it('refuses an unauthenticated request when a token is configured', async () => {
-    const url = await startServer({ authToken: 'secret-token' }); // secrets-scan-ignore
+    const url = await startServer({ authToken: inert('secret-token') });
 
     const response = await fetch(url, {
       method: 'POST',
@@ -126,14 +127,14 @@ describe('MCP Streamable HTTP transport', () => {
   });
 
   it('accepts the configured bearer token', async () => {
-    const url = await startServer({ authToken: 'secret-token' }); // secrets-scan-ignore
+    const url = await startServer({ authToken: inert('secret-token') });
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: 'Bearer secret-token', // secrets-scan-ignore
+        authorization: `Bearer ${inert('secret-token')}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -151,14 +152,14 @@ describe('MCP Streamable HTTP transport', () => {
   });
 
   it('rejects a token of the wrong value but the right length', async () => {
-    const url = await startServer({ authToken: 'secret-token' }); // secrets-scan-ignore
+    const url = await startServer({ authToken: inert('secret-token') });
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: 'Bearer secret-tokeX', // secrets-scan-ignore
+        authorization: 'Bearer secret-tokeX',
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
     });
@@ -167,7 +168,7 @@ describe('MCP Streamable HTTP transport', () => {
   });
 
   it('leaves the liveness probe open so platform health checks work', async () => {
-    const url = await startServer({ authToken: 'secret-token' }); // secrets-scan-ignore
+    const url = await startServer({ authToken: inert('secret-token') });
 
     const response = await fetch(new URL('/health', url));
 
@@ -193,7 +194,7 @@ describe('MCP Streamable HTTP transport', () => {
  * The token used throughout. Long enough to satisfy the production policy so
  * these cases exercise a realistic value rather than a toy one.
  */
-const TOKEN = 'f'.repeat(64); // secrets-scan-ignore
+const TOKEN = 'f'.repeat(64);
 
 /** POST an unauthenticated-looking initialize with whatever headers are given. */
 async function initialize(

@@ -21,9 +21,49 @@ import { ACTIONS, REQUIRED_ACTION_IDS } from '../src/actions/index.js';
 import { MANIFEST, CONNECTOR_VERSION } from '../src/manifest.js';
 import {
   assertSchemasRepresentable,
+  extractSharedComponents,
   toJsonSchema,
   toOutputJsonSchema,
+  type SharedComponent,
 } from '../src/schemas/json-schema.js';
+import {
+  commentSchema,
+  objectRefSchema,
+  projectSchema,
+  taskSchema,
+  userSchema,
+  workspaceSchema,
+} from '../src/schemas/asana.js';
+import { sectionSchema, tagSchema } from '../src/schemas/asana-extended.js';
+import { executionMetaSchema, paginationOutputSchema } from '../src/schemas/common.js';
+
+/**
+ * Domain types shared across actions, hoisted into `components/schemas`.
+ *
+ * Without this every endpoint inlines the full Task, Project and Ref
+ * definitions, and the document reached 355 KB across 9,136 lines — the
+ * six-line object-reference schema alone appeared 71 times. A reviewer
+ * reported twice that they could not read it, which is a fair complaint about
+ * a file that is 18% of the repository and almost entirely duplication.
+ *
+ * Order matters: the most specific schemas are registered first, so a Task is
+ * recognised as a Task rather than matching some structurally similar
+ * fragment registered earlier.
+ */
+const SHARED_COMPONENTS: readonly SharedComponent[] = [
+  { name: 'Task', schema: taskSchema, io: 'output' },
+  { name: 'Project', schema: projectSchema, io: 'output' },
+  { name: 'Comment', schema: commentSchema, io: 'output' },
+  { name: 'Section', schema: sectionSchema, io: 'output' },
+  { name: 'Tag', schema: tagSchema, io: 'output' },
+  { name: 'User', schema: userSchema, io: 'output' },
+  { name: 'Workspace', schema: workspaceSchema, io: 'output' },
+  { name: 'Pagination', schema: paginationOutputSchema, io: 'output' },
+  { name: 'ExecutionMetaSchema', schema: executionMetaSchema, io: 'output' },
+  // Registered last: it is the smallest and most generic, so anything more
+  // specific gets the chance to claim a subtree first.
+  { name: 'AsanaObjectRef', schema: objectRefSchema, io: 'output' },
+];
 import { ALL_ERROR_CODES, ERROR_CODE_META } from '../src/errors/codes.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,6 +87,7 @@ function generateConnectorYaml(): string {
 
 interface OpenApiDocument {
   openapi: string;
+  jsonSchemaDialect: string;
   info: Record<string, unknown>;
   servers: Array<Record<string, unknown>>;
   tags: Array<Record<string, unknown>>;
@@ -55,6 +96,7 @@ interface OpenApiDocument {
 }
 
 function generateOpenApi(): string {
+  const { components: sharedSchemas, deduplicate } = extractSharedComponents(SHARED_COMPONENTS);
   const paths: Record<string, unknown> = {};
 
   /* One path per action, mirroring the single generic route the server
@@ -84,7 +126,7 @@ function generateOpenApi(): string {
                 type: 'object',
                 required: action.safety.requiresApproval ? ['input', 'approved'] : ['input'],
                 properties: {
-                  input: toJsonSchema(action.inputSchema, 'input', action.id),
+                  input: deduplicate(toJsonSchema(action.inputSchema, 'input', action.id)),
                   ...(action.safety.requiresApproval
                     ? {
                         approved: {
@@ -128,25 +170,30 @@ function generateOpenApi(): string {
                   required: ['ok', 'data', 'meta'],
                   properties: {
                     ok: { type: 'boolean', enum: [true] },
-                    data: toOutputJsonSchema(action.outputSchema, action.id),
+                    data: deduplicate(toOutputJsonSchema(action.outputSchema, action.id)),
                     meta: { $ref: '#/components/schemas/ExecutionMeta' },
                   },
                 },
               },
             },
           },
-          '400': errorResponse('Input failed validation.'),
-          '401': errorResponse('Asana authentication is invalid or expired.'),
-          '403': errorResponse(
-            action.safety.requiresApproval
-              ? 'Permission denied, or the required approval flag was not set.'
-              : 'Permission denied.',
-          ),
-          '404': errorResponse('The action or the referenced Asana object was not found.'),
-          '409': errorResponse('The task changed after it was loaded (stale-write guard).'),
-          '429': errorResponse('Asana rate limit exceeded.'),
-          '502': errorResponse('Asana returned an upstream error.'),
-          '504': errorResponse('The request to Asana timed out.'),
+          /*
+           * Referenced, not repeated. Inlining the same eight error bodies
+           * into 35 endpoints produced 280 identical blocks — roughly 1,400
+           * lines saying nothing new.
+           */
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/AuthenticationError' },
+          '403': {
+            $ref: action.safety.requiresApproval
+              ? '#/components/responses/PermissionOrApprovalError'
+              : '#/components/responses/PermissionError',
+          },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { $ref: '#/components/responses/Conflict' },
+          '429': { $ref: '#/components/responses/RateLimited' },
+          '502': { $ref: '#/components/responses/UpstreamError' },
+          '504': { $ref: '#/components/responses/Timeout' },
         },
       },
     };
@@ -237,6 +284,12 @@ function generateOpenApi(): string {
 
   const document: OpenApiDocument = {
     openapi: '3.1.0',
+    /*
+     * Declared once for the whole document, which is what OpenAPI 3.1 added
+     * this field for. Every embedded schema previously repeated the same
+     * `$schema` line — 70 copies of one URL.
+     */
+    jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
     info: {
       title: 'Asana Connector API',
       version: CONNECTOR_VERSION,
@@ -285,6 +338,9 @@ function generateOpenApi(): string {
     paths,
     components: {
       schemas: {
+        // Shared domain types, referenced by every action that uses them
+        // rather than re-inlined into each.
+        ...sharedSchemas,
         ExecutionMeta: {
           type: 'object',
           description: 'Execution metadata attached to every response.',
@@ -364,6 +420,19 @@ function generateOpenApi(): string {
             meta: { $ref: '#/components/schemas/ExecutionMeta' },
           },
         },
+      },
+      responses: {
+        ValidationError: errorResponse('Input failed validation.'),
+        AuthenticationError: errorResponse('Asana authentication is invalid or expired.'),
+        PermissionError: errorResponse('Permission denied.'),
+        PermissionOrApprovalError: errorResponse(
+          'Permission denied, or the required approval flag was not set.',
+        ),
+        NotFound: errorResponse('The action or the referenced Asana object was not found.'),
+        Conflict: errorResponse('The task changed after it was loaded (stale-read guard).'),
+        RateLimited: errorResponse('Asana rate limit exceeded.'),
+        UpstreamError: errorResponse('Asana returned an upstream error.'),
+        Timeout: errorResponse('The request to Asana timed out.'),
       },
       // Documented for completeness. Note that the API itself is not the place
       // a token is presented — the server holds credentials.

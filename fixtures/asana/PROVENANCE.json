@@ -1,0 +1,76 @@
+{
+  "capturedAt": "2026-09-06T15:24:00.000Z",
+  "apiBaseUrl": "https://app.asana.com/api/1.0",
+  "credentialType": "pat",
+  "anonymized": true,
+  "anonymizationNote": "Every gid, person, workspace, project, task, comment and timestamp was rewritten by scripts/capture-fixtures.ts before any file was written. No real identifier reached disk. See fixtures/asana/README.md.",
+  "writesCaptured": true,
+  "fixtures": [
+    {
+      "file": "get_current_user.json",
+      "endpoint": "GET /users/me",
+      "bytes": 237,
+      "sha256": "48668572aef2c5679d1903100bc94e4d934d720f24844a8d3724b6116f72174e"
+    },
+    {
+      "file": "list_projects.json",
+      "endpoint": "GET /projects?workspace=\u2026",
+      "bytes": 581,
+      "sha256": "3b00b6639d4a0dc302220b3aa950d9b828b434fe5df26a235019d88b05c172f4"
+    },
+    {
+      "file": "list_project_tasks.json",
+      "endpoint": "GET /tasks?project=\u2026",
+      "bytes": 2533,
+      "sha256": "14db413e05d7be8eaecdcd06f7e65f919afad69767e3a5aee491c0e7a023af5d"
+    },
+    {
+      "file": "get_task.json",
+      "endpoint": "GET /tasks/{task_gid}",
+      "bytes": 500,
+      "sha256": "2a589ce65d5d5025f5d5a889e79456f5668a88b3a29da9d85446419c73324b6b"
+    },
+    {
+      "file": "create_task.json",
+      "endpoint": "POST /tasks",
+      "bytes": 501,
+      "sha256": "efbb14be163f4144f4c866c68f9d87a03b902bce4f09e0ed2454c2ee951fc1c3"
+    },
+    {
+      "file": "update_task.json",
+      "endpoint": "PUT /tasks/{task_gid}",
+      "bytes": 501,
+      "sha256": "af56dfd2af78ec8c072e9ae92eebff05402b3feb81e348e1f583411315ffe68a"
+    },
+    {
+      "file": "list_users.json",
+      "endpoint": "GET /users?workspace=\u2026",
+      "bytes": 136,
+      "sha256": "69cbf6e1940fb7cb32dd6d1bf483214af64b50f633466d312463a5ea85886fdc"
+    },
+    {
+      "file": "list_project_sections.json",
+      "endpoint": "GET /projects/{project_gid}/sections",
+      "bytes": 363,
+      "sha256": "9c05db6b06d5a968ce986f59e94c7feaa567aaff45b8b743e61eb5cb904cd0da"
+    },
+    {
+      "file": "list_comments.json",
+      "endpoint": "GET /tasks/{task_gid}/stories",
+      "bytes": 1003,
+      "sha256": "091871b30c78586f6212982890adfbed1a58f806bd2779904be83b8559c7d72f"
+    },
+    {
+      "file": "add_comment.json",
+      "endpoint": "POST /tasks/{task_gid}/stories",
+      "bytes": 288,
+      "sha256": "7f65ba91986eaf478637e8fb240d0cb3291201abc46e8929484af62fc55cb54b"
+    },
+    {
+      "file": "error_not_found.json",
+      "endpoint": "GET /tasks/{unknown_gid} -> 404",
+      "bytes": 230,
+      "sha256": "82fee8174fb8553a830b5f300f413c596762da9ae6dd6a892ed085eca2f4d1e4"
+    }
+  ]
+}
